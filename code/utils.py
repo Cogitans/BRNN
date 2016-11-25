@@ -116,11 +116,6 @@ class Clockwork(SimpleRNN):
     """From githubnemo"""
 
     '''Clockwork Recurrent Neural Network - Koutnik et al. 2014.
-    A Clockwork RNN splits a SimpleRNN layer into modules of equal size.'''
-class Clockwork(SimpleRNN):
-    """From githubnemo"""
-
-    '''Clockwork Recurrent Neural Network - Koutnik et al. 2014.
     A Clockwork RNN splits a SimpleRNN layer into modules of equal size.
     Each module is activated during its associated clock period.
     This results in "fast" modules capturing short-term dependencies
@@ -174,15 +169,15 @@ class Clockwork(SimpleRNN):
         if self.stateful:
             self.reset_states()
         else:
-            self.states = [None]#, None]
+            self.states = [None, None]
 
     def get_initial_states(self, x):
         initial_states = super(Clockwork, self).get_initial_states(x)
-      #  if self.go_backwards:
-      #      input_length = self.input_spec[0].shape[1]
-       #     initial_states[-1] = float(input_length)
-      #  else:
-        #    initial_states[-1] = K.variable(0.)
+       if self.go_backwards:
+           input_length = self.input_spec[0].shape[1]
+           initial_states[-1] = float(input_length)
+       else:
+           initial_states[-1] = K.variable(np.zeros_like(initial_states[0]))
         return initial_states
 
     def reset_states(self):
@@ -200,10 +195,11 @@ class Clockwork(SimpleRNN):
         if hasattr(self, 'states'):
             K.set_value(self.states[0],
                         np.zeros((input_shape[0], self.output_dim)))
-            #K.set_value(self.states[1], initial_time)
+            K.set_value(self.states[1], 
+                        np.full(((input_shape[0], self.output_dim)), initial_time))
         else:
-            self.states = [K.zeros((input_shape[0], self.output_dim))]#,
-                          # K.variable(initial_time)]
+            self.states = [K.zeros((input_shape[0], self.output_dim)),
+                          K.variable(np.full(((input_shape[0], self.output_dim)), initial_time))]
 
 
     def get_constants(self, x):
@@ -222,4 +218,4 @@ class Clockwork(SimpleRNN):
 
         # note: switch evaluates the expression for each element so only
         # the modules which period matches the time step is activated here.
-        output = K.switch(K.equal(time_step % periods, 0.), output, prev_output)
+        output = K.switch(K.equal(time_step[0] % periods, 0.), output, prev_output)
