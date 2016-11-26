@@ -2,6 +2,7 @@ import numpy as np
 import tensorflow as tf
 from utils import *
 from quantifications import *
+from keras_extensions import *
 from keras import backend as K
 from keras.layers.recurrent import SimpleRNN, GRU, LSTM
 from keras.objectives import categorical_crossentropy
@@ -15,20 +16,19 @@ K.set_session(sess)
 #### Constants Definition ####
 
 DATA = "../datasets/"
-SAVE = "../results/"
 TEXT8 = DATA + "text8"
 MODEL_PATH = DATA + "model.keras"
-SAVE_PATH = SAVE + "saved_quick.tf"
-LOSS_PATH = SAVE + "timesteps/"
-
-batch_size = 64
+SAVE_PATH = DATA + "saved_quick.tf"
+LOSS_PATH = DATA + "type_tern/"
+batch_size = 3
 num_batch = None
-how_often = 100
+how_often = 1
 
 
 ##############################
 
 #### Data Establishing ####
+
 def run(LR, val, RNN_TYPE, TIMESTEPS):
 	quantify = deterministic_ternary(val)
 	num_timesteps = TIMESTEPS
@@ -38,7 +38,7 @@ def run(LR, val, RNN_TYPE, TIMESTEPS):
 	x_y_generator = data_target_generator(text_generator, c_to_l, num_classes)
 	text_x_y_generator = data_target_generator(test_generator, c_to_l, num_classes)
 	num_batch_in_epoch = per_epoch(batch_size, num_timesteps)
-	num_batch = 1 * num_batch_in_epoch / 10
+	num_batch = 1 * num_batch_in_epoch / 100
 
 	###########################
 
@@ -76,9 +76,9 @@ def run(LR, val, RNN_TYPE, TIMESTEPS):
 	for k, (grad, var) in enumerate(grads_vars):
 		grads_vars[k] = (grad, var_to_real[var])
 	app = optimizer.apply_gradients(grads_vars)
-	with tf.device('/gpu:3') if RNN_TYPE != Clockwork else tf.device('/cpu:0'):
-		assignments = [tf.assign(w, quantify(var_to_real[w])).op for w in tf.trainable_variables()]
-		clips = [tf.assign(w, tf.clip_by_value(w, -val, val)).op for w in real_valued]
+
+	assignments = [tf.assign(w, quantify(var_to_real[w])).op for w in tf.trainable_variables()]
+	clips = [tf.assign(w, tf.clip_by_value(w, -val, val)).op for w in real_valued]
 
 	saver = tf.train.Saver()
 	losses = []
@@ -96,8 +96,8 @@ def run(LR, val, RNN_TYPE, TIMESTEPS):
 			app.run(feed_dict={i: X, labels: y})
 			for w in clips:
 				w.run()
-			if batch % 10 == 0:
-				losses.append(loss.eval(feed_dict={i: test_X, labels: test_y}))
+			losses.append(acc_value.eval(feed_dict={i: test_X, labels: test_y}))
+			printProgress(batch, num_batch_in_epoch, how_often, losses[-1])
 			if batch % how_often == 0:
 				saver.save(sess, SAVE_PATH)
 				printProgress(batch, num_batch_in_epoch, how_often, losses[-1])
@@ -110,6 +110,5 @@ for lr in [1e-4]:
 			for timestep in [8, 16, 32, 64]:
 				print("\tBeginning run with LR = {0}, val = {1}, type of RNN = {2}, timestep = {3}".format(lr, val, rnn.__name__, timestep))
 				run(lr, val, rnn, timestep)
-
 
 
