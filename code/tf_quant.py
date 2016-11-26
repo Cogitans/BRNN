@@ -19,9 +19,8 @@ SAVE = "../results/"
 TEXT8 = DATA + "text8"
 MODEL_PATH = DATA + "model.keras"
 SAVE_PATH = SAVE + "saved_quick.tf"
-LOSS_PATH = SAVE + "baselines_5/"
+LOSS_PATH = SAVE + "timesteps/"
 
-num_timesteps = 64
 batch_size = 64
 num_batch = None
 how_often = 100
@@ -30,8 +29,9 @@ how_often = 100
 ##############################
 
 #### Data Establishing ####
-def run(LR, val, RNN_TYPE):
-	quantify = identity
+def run(LR, val, RNN_TYPE, TIMESTEPS):
+	quantify = deterministic_ternary(val)
+	num_timesteps = TIMESTEPS
 	text_generator = text_8_generator(num_timesteps, batch_size)
 	test_generator = test_8_generator(num_timesteps, batch_size)
 	num_classes, c_to_l, l_to_c = char_mapping(TEXT8)
@@ -47,9 +47,15 @@ def run(LR, val, RNN_TYPE):
 	i = tf.placeholder(tf.float32, shape=(batch_size, num_timesteps, num_classes), name="X")
 	labels = tf.placeholder(tf.float32, shape=(batch_size, num_timesteps, num_classes), name="y")
 	with tf.device('/gpu:0') if RNN_TYPE != Clockwork else tf.device('/cpu:0'):
-		h1 = RNN_TYPE(400, periods=[1, 2, 4, 8, 16], stateful=True, return_sequences=True)(i)
+		if RNN_TYPE == Clockwork:
+			h1 = RNN_TYPE(400, init=ternary_choice(val), inner_init="identity", periods=[1, 2, 4, 8, 16], stateful=True, return_sequences=True)(i)
+		else:
+			h1 = RNN_TYPE(400, init=ternary_choice(val), inner_init="identity",stateful=True, return_sequences=True)(i)
 	with tf.device('/gpu:1') if RNN_TYPE != Clockwork else tf.device('/cpu:0'):
-		o = RNN_TYPE(num_classes, periods=[1, 2, 4, 8, 16, 32, 64], stateful=True, return_sequences=True)(h1)
+		if RNN_TYPE == Clockwork:
+			o = RNN_TYPE(num_classes, init=ternary_choice(val), inner_init="identity",periods=[1, 2, 4, 8, 16, 32, 64], stateful=True, return_sequences=True)(h1)
+		else:
+			o = RNN_TYPE(num_classes, init=ternary_choice(val), inner_init="identity",stateful=True, return_sequences=True)(h1)
 	loss = tf.reduce_mean(categorical_crossentropy(labels, o))
 	acc_value = accuracy(labels, o)
 
@@ -95,14 +101,15 @@ def run(LR, val, RNN_TYPE):
 			if batch % how_often == 0:
 				saver.save(sess, SAVE_PATH)
 				printProgress(batch, num_batch_in_epoch, how_often, losses[-1])
-				with open(LOSS_PATH + "{0}_{1}_{2}.w".format(LR, val, RNN_TYPE.__name__), "wb") as f:
+				with open(LOSS_PATH + "{0}_{1}_{2}_{3}.w".format(LR, val, RNN_TYPE.__name__, TIMESTEPS), "wb") as f:
 					pickle.dump([losses], f)
 
-for lr in [1e-3, 1e-4, 1e-6]:
-	for val in [np.inf]:
-		for rnn in [Clockwork]:
-			print("\tBeginning run with LR = {0}, val = {1}, type of RNN = {2}".format(lr, val, rnn.__name__))
-			run(lr, val, rnn)
+for lr in [1e-4]:
+	for val in [1]:
+		for rnn in [SimpleRNN, GRU, Clockwork]:
+			for timestep in [8, 16, 32, 64]:
+				print("\tBeginning run with LR = {0}, val = {1}, type of RNN = {2}, timestep = {3}".format(lr, val, rnn.__name__, timestep))
+				run(lr, val, rnn, timestep)
 
 
 
