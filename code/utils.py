@@ -173,10 +173,10 @@ class Clockwork(SimpleRNN):
 
     def get_initial_states(self, x):
         initial_states = super(Clockwork, self).get_initial_states(x)
-       if self.go_backwards:
+      	if self.go_backwards:
            input_length = self.input_spec[0].shape[1]
            initial_states[-1] = float(input_length)
-       else:
+       	else:
            initial_states[-1] = K.variable(np.zeros_like(initial_states[0]))
         return initial_states
 
@@ -208,14 +208,14 @@ class Clockwork(SimpleRNN):
     def step(self, x, states):
         # B_U and B_W are dropout weights
         prev_output, time_step, B_U, B_W, periods = states
-
+	time = K.max(time_step)
         if self.consume_less == 'cpu':
             h = x
         else:
             h = K.dot(x * B_W, self.W) + self.b
 
         output = self.activation(h + K.dot(prev_output * B_U, self.U))
-
         # note: switch evaluates the expression for each element so only
         # the modules which period matches the time step is activated here.
-        output = K.switch(K.equal(time_step[0] % periods, 0.), output, prev_output)
+	output = K.transpose(tf.select(K.equal(tf.mod(time, periods), 0.), K.transpose(output), K.transpose(prev_output)))
+	return output, [output, time_step + 1]
