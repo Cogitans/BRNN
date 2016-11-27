@@ -80,13 +80,13 @@ def text_8_generator(CHAR_NUM, NB_SAMPLES):
     char_list = np.array(char_list)
     i = 1
     while True:
+        if ((NB_SAMPLES-1)*HOW_FAR + i*CHAR_NUM) > len(char_list) - 1:
+            i = 1
         X = np.zeros((NB_SAMPLES, CHAR_NUM), dtype='|S1')
         for s in np.arange(NB_SAMPLES):
             X[s, :] = char_list[s*HOW_FAR + (i-1)*CHAR_NUM:s*HOW_FAR + i*CHAR_NUM]
         yield X
         i += 1
-        if ((NB_SAMPLES-1)*HOW_FAR + i*CHAR_NUM) > len(char_list) - 1:
-            i = 1
 
 def test_8_generator(CHAR_NUM, NB_SAMPLES, value = None):
     CHAR_NUM = CHAR_NUM + 1
