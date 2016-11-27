@@ -5,12 +5,13 @@ from keras import backend as K
 from keras.callbacks import Callback
 from keras.initializations import uniform
 from keras.layers.recurrent import SimpleRNN
+import time
 
 START = ''
 DATA = "../datasets/"
 TEXT8 = DATA + "text8"
 MODEL_PATH = DATA + "model.keras"
-TRAIN_PERCENT = 0.9
+TRAIN_PERCENT = 0.9999
 
 def per_epoch(samples, batch_size):
     with open(TEXT8, "rb") as f:
@@ -18,9 +19,10 @@ def per_epoch(samples, batch_size):
         return len(data)/samples/batch_size
 
 def ternary_choice(val):
-	def init(shape, scale=None, name=None):
-		return tf.random_uniform(shape, -val, val)
-	return init		
+    def init(shape, scale=None, name=None):
+        mat = np.random.choice([0, -val, val], shape)
+        return tf.Variable(mat, dtype=tf.float32)
+    return init
 
 def nary_uniform(shape, scale=1.5, name=None):
     return K.random_uniform_variable(shape, -scale, scale, name=name)
@@ -63,10 +65,10 @@ def sample(probs):
 def char_mapping(path):
     with open(path, "rb") as f:
         read_data = f.readlines()
-        chars = [START] + list(set(read_data[0]))
-        char_to_labels = {ch:i for i, ch in enumerate(chars)}
-        labels_to_char = {i:ch for i, ch in enumerate(chars)}
-        return len(chars), char_to_labels, labels_to_char
+    chars = [START] + list(set(read_data[0]))
+    char_to_labels = {ch:i for i, ch in enumerate(chars)}
+    labels_to_char = {i:ch for i, ch in enumerate(chars)}
+    return len(chars), char_to_labels, labels_to_char
 
 def text_8_generator(CHAR_NUM, NB_SAMPLES):
     CHAR_NUM = CHAR_NUM + 1
@@ -86,7 +88,7 @@ def text_8_generator(CHAR_NUM, NB_SAMPLES):
         if ((NB_SAMPLES-1)*HOW_FAR + i*CHAR_NUM) > len(char_list) - 1:
             i = 1
 
-def test_8_generator(CHAR_NUM, NB_SAMPLES):
+def test_8_generator(CHAR_NUM, NB_SAMPLES, value = None):
     CHAR_NUM = CHAR_NUM + 1
     with open(TEXT8, "rb") as f:
         read_data = f.readlines()
@@ -99,123 +101,51 @@ def test_8_generator(CHAR_NUM, NB_SAMPLES):
         X = np.zeros((NB_SAMPLES, CHAR_NUM), dtype='|S1')
         for s in np.arange(NB_SAMPLES):
             X[s, :] = char_list[s*HOW_FAR + (i-1)*CHAR_NUM:s*HOW_FAR + i*CHAR_NUM]
-        yield X
         i += 1
+        if value:
+            value = yield X, (((NB_SAMPLES-1)*HOW_FAR + i*CHAR_NUM) > len(char_list) - 1)
+        else:
+            value = yield X
         if ((NB_SAMPLES-1)*HOW_FAR + i*CHAR_NUM) > len(char_list) - 1:
             i = 1
 
-def data_target_generator(g, c_to_l, INPUT_DIM):
+def data_target_generator(g, c_to_l, INPUT_DIM, value = None):
     while True:
-        text = g.next()
+        if value:
+            text, done = g.send(value)
+        else:
+            text = g.send(value)
         data = one_hot(text, c_to_l, INPUT_DIM)
         X = data[:, :-1, :]
         y = data[:, 1:, :]
-        yield (X, y)
-
-class Clockwork(SimpleRNN):
-    """From githubnemo"""
-
-    '''Clockwork Recurrent Neural Network - Koutnik et al. 2014.
-    A Clockwork RNN splits a SimpleRNN layer into modules of equal size.
-    Each module is activated during its associated clock period.
-    This results in "fast" modules capturing short-term dependencies
-    while "slow" modules capture long-term dependencies.
-    Periods are assigned in ascending order from left to right.
-    Modules are only connected from right to left, allowing
-    "slow" modules with larger periods to influence the "faster"
-    modules with smaller periods.
-    # Arguments
-        output_dim: Dimension of internal (module) projections and the
-                    final output. Module size is defined by
-                    `output_dim / len(periods)`.
-        periods: The activation periods of the modules. The number of
-                 periods defines the number of modules.
-    # References
-        - [A Clockwork RNN](http://arxiv.org/abs/1402.3511)
-    '''
-    def __init__(self, output_dim, periods=[1], **kwargs):
-        self.output_dim = output_dim
-
-        assert len(periods) > 0 and output_dim % len(periods) == 0, (
-            'Output dimension ({}) must be divisible '.format(output_dim) +
-            'by the number of periods ({}) since modules are equally sized '.format(len(periods)) +
-            'and each module must have its own period.')
-        self.periods = np.asarray(sorted(periods))
-
-        super(Clockwork, self).__init__(output_dim, **kwargs)
-
-    def build(self, input_shape):
-        input_dim = input_shape[2]
-        n = self.output_dim // len(self.periods)
-
-        module_mask = np.zeros((self.output_dim, self.output_dim), K.floatx())
-        periods = np.zeros((self.output_dim,), np.int16)
-
-        for i, t in enumerate(self.periods):
-            module_mask[i*n:, i*n:(i+1)*n] = 1
-            periods[i*n:(i+1)*n] = t
-
-        module_mask = K.variable(module_mask, name='module_mask')
-        self.periods = K.variable(periods, name='periods')
-
-        super(Clockwork, self).build(input_shape)
-
-        # Make sure modules are shortcut from slow to high periods.
-        # Placed after super().build since it fills U with values which
-        # we want to shadow.
-        self.U *= module_mask
-
-        # track previous state as well as time step (for periodic activation)
-        if self.stateful:
-            self.reset_states()
+        if value:
+            value = yield (X, y), done
         else:
-            self.states = [None, None]
+            value = yield (X, y)
 
-    def get_initial_states(self, x):
-        initial_states = super(Clockwork, self).get_initial_states(x)
-      	if self.go_backwards:
-           input_length = self.input_spec[0].shape[1]
-           initial_states[-1] = float(input_length)
-       	else:
-           initial_states[-1] = K.variable(np.zeros_like(initial_states[0]))
-        return initial_states
+class Timer:
 
-    def reset_states(self):
-        assert self.stateful, 'Layer must be stateful.'
-        input_shape = self.input_spec[0].shape
-        if not input_shape[0]:
-            raise Exception('If a RNN is stateful, a complete ' +
-                            'input_shape must be provided (including batch size).')
+    def __init__(self):
+        self.silent = False
 
-        if self.go_backwards:
-            initial_time = self.input_spec[0].shape[1]
-        else:
-            initial_time = 0.
+    def tic(self, msg = None): 
+        self.t = time.time()
+        self.ticked = True
+        self.msg = msg
 
-        if hasattr(self, 'states'):
-            K.set_value(self.states[0],
-                        np.zeros((input_shape[0], self.output_dim)))
-            K.set_value(self.states[1], 
-                        np.full(((input_shape[0], self.output_dim)), initial_time))
-        else:
-            self.states = [K.zeros((input_shape[0], self.output_dim)),
-                          K.variable(np.full(((input_shape[0], self.output_dim)), initial_time))]
+    def toc(self):
+        if not self.ticked:
+            raise Exception()
+        if not self.silent:
+            if not self.msg:
+                print("Time elapsed: {0}".format(time.time() - self.t))
+            else:
+                print("Time elapsed since {0}: {1}".format(self.msg, time.time() - self.t))
+        self.ticked = False
+        self.msg = None
 
+    def silence(self):
+        self.silent = not self.silent
 
-    def get_constants(self, x):
-        return super(Clockwork, self).get_constants(x) + [self.periods]
+T = Timer()
 
-    def step(self, x, states):
-        # B_U and B_W are dropout weights
-        prev_output, time_step, B_U, B_W, periods = states
-	time = K.max(time_step)
-        if self.consume_less == 'cpu':
-            h = x
-        else:
-            h = K.dot(x * B_W, self.W) + self.b
-
-        output = self.activation(h + K.dot(prev_output * B_U, self.U))
-        # note: switch evaluates the expression for each element so only
-        # the modules which period matches the time step is activated here.
-	output = K.transpose(tf.select(K.equal(tf.mod(time, periods), 0.), K.transpose(output), K.transpose(prev_output)))
-	return output, [output, time_step + 1]

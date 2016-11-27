@@ -4,6 +4,7 @@ from keras.layers.recurrent import SimpleRNN, GRU, LSTM
 from keras import backend as K
 import matplotlib.pyplot as plt
 import time
+import tensorflow as tf
 
 class Clockwork(SimpleRNN):
     """From githubnemo"""
@@ -47,7 +48,7 @@ class Clockwork(SimpleRNN):
         for i, t in enumerate(self.periods):
             module_mask[i*n:, i*n:(i+1)*n] = 1
             periods[i*n:(i+1)*n] = t
-        print(per)
+
         module_mask = K.variable(module_mask, name='module_mask')
         self.periods = K.variable(periods, name='periods')
 
@@ -101,19 +102,19 @@ class Clockwork(SimpleRNN):
     def step(self, x, states):
         # B_U and B_W are dropout weights
         prev_output, time_step, B_U, B_W, periods = states
-
+        time = K.max(time_step)
         if self.consume_less == 'cpu':
             h = x
         else:
             h = K.dot(x * B_W, self.W) + self.b
 
         output = self.activation(h + K.dot(prev_output * B_U, self.U))
-
         # note: switch evaluates the expression for each element so only
         # the modules which period matches the time step is activated here.
-        output = K.switch(K.equal(time_step[0] % periods, 0.), output, prev_output)
+        output = K.transpose(tf.select(K.equal(tf.mod(time, periods), 0.), K.transpose(output), K.transpose(prev_output)))
+        return output, [output, time_step + 1]
 
-class MUT1(Recurrent):
+class MUT1(GRU):
 
     def preprocess_input(self, x):
         return x
@@ -131,7 +132,7 @@ class MUT1(Recurrent):
         h = h_temp * z + h_tm1 * (1 - z)
         return h, [h]
 
-class MUT2(Recurrent):
+class MUT2(GRU):
 
     def preprocess_input(self, x):
         return x
