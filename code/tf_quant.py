@@ -22,16 +22,16 @@ MODEL_PATH = DATA + "model.keras"
 SAVE_PATH = SAVE + "saved_quick.tf"
 LOSS_PATH = SAVE + "testing/"
 
-batch_size = 3
-HIDDEN_SIZE = 3
+batch_size = 64
+HIDDEN_SIZE = 400
 num_batch = None
-how_often = 1
+how_often = 25
 
 
 ##############################
 
 #### Data Establishing ####
-def run(LR, val, RNN_TYPE, TIMESTEPS, GPU_FLAG=True, NUM_BATCH = None, SAVE_WEIGHTS = False, VERBOSE = True):
+def run(LR, val, RNN_TYPE, TIMESTEPS = 64, GPU_FLAG=True, NUM_BATCH = None, SAVE_WEIGHTS = False, VERBOSE = True):
 	quantify = deterministic_ternary(val)
 	num_timesteps = TIMESTEPS
 	text_generator = text_8_generator(num_timesteps, batch_size)
@@ -131,6 +131,7 @@ def run(LR, val, RNN_TYPE, TIMESTEPS, GPU_FLAG=True, NUM_BATCH = None, SAVE_WEIG
 				while True:
 					(text_X, text_Y), done = text_x_y_generator.send(True)
 					validation_loss += loss.eval(feed_dict={i: test_X, labels: test_y})
+					print(validation_loss)
 					count += 1
 					if done:
 						break
@@ -154,4 +155,4 @@ def run(LR, val, RNN_TYPE, TIMESTEPS, GPU_FLAG=True, NUM_BATCH = None, SAVE_WEIG
 
 
 
-run(1e-6, 2, GRU, 3, GPU_FLAG = False, NUM_BATCH = 20)
+run(1e-6, 1, GRU)
