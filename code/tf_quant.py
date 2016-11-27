@@ -126,17 +126,13 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = 64, GPU_FLAG=True, NUM_BATCH = None, SAVE
 				T.tic("calculating loss")
 				validation_loss = 0.0
 				count = 0
-				# layer1.reset_states()
-				# layer2.reset_states()
 				while True:
-					(text_X, text_Y), done = text_x_y_generator.send(True)
-					validation_loss += loss.eval(feed_dict={i: test_X, labels: test_y})
-					print(validation_loss)
+					(test_X, test_Y), done = text_x_y_generator.send(True)
+					curr_loss = loss.eval(feed_dict={i: test_X, labels: test_y})
+					validation_loss += curr_loss
 					count += 1
 					if done:
 						break
-				# layer1.reset_states()
-				# layer2.reset_states()
 				losses.append(validation_loss / count)
 				T.toc()
 				if SAVE_WEIGHTS: saver.save(sess, SAVE_PATH)
