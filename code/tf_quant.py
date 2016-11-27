@@ -84,7 +84,7 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = 64, GPU_FLAG=True, NUM_BATCH = None, SAVE
 	optimizer = tf.train.AdamOptimizer(LR)
 	grads_vars = optimizer.compute_gradients(loss)
 	for k, (grad, var) in enumerate(grads_vars):
-		grads_vars[k] = (grad, var_to_real[var])
+		grads_vars[k] = (tf.clip_by_value(grad, -1, 1), var_to_real[var])
 	app = optimizer.apply_gradients(grads_vars)
 	with tf.device('/gpu:3') if RNN_TYPE != Clockwork and GPU_FLAG else tf.device('/cpu:0'):
 		assignments = [tf.assign(w, quantify(var_to_real[w])).op for w in tf.trainable_variables()]
@@ -112,7 +112,7 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = 64, GPU_FLAG=True, NUM_BATCH = None, SAVE
 			T.tic("computing forward pass")
 			app.run(feed_dict={i: X, labels: y})
 			# for g, v in grads_vars:
-			# 	print(g.eval(feed_dict={i: X, labels: y}))
+			print(grads_vars[1][0].eval(feed_dict={i: X, labels: y}))
 			T.toc()
 			T.tic("updating statefulness")
 			for op in update_ops:
@@ -151,4 +151,4 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = 64, GPU_FLAG=True, NUM_BATCH = None, SAVE
 
 
 
-run(1e-6, 1, GRU)
+run(1e-6, 1, GRU, GPU_FLAG = False)
