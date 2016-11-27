@@ -30,7 +30,7 @@ def nary_uniform(shape, scale=1.5, name=None):
 def printProgress(place, place_per, how_often, loss):
     if place % how_often == 0:
         x = place // place_per
-        print("{0}% percent through epoch {1}. Loss is {2}.".format(100*place/float(place_per), x, loss))
+        print("{0} percent through epoch {1}. Loss is {2}.".format(100*place/float(place_per), x, loss))
 
 def trinaryQuant(x):
     orig = x
