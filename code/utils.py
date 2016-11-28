@@ -1,6 +1,7 @@
 import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt
+from keras.utils.np_utils import to_categorical
 from keras import backend as K
 from keras.callbacks import Callback
 from keras.initializations import uniform
@@ -161,18 +162,25 @@ def load_data(name):
             train_data.append(line_arr[2:-1])
     return np.array(train_data), np.array(train_labels)
 
-X_train, y_train = load_data("datatraining.txt")
-X_test, y_test = load_data("datatest.txt")
-y_train = to_categorical(y_train, nb_classes)
-y_test = to_categorical(y_test, nb_classes)
 
-def small_data_generator(X, y):
+
+def small_data_generator(X, y, BATCH_SIZE, TIMESTEPS):
     assert X.shape[0] == y.shape[0]
     assert BATCH_SIZE < X.shape[0]
     i = 0
     while True:
-        yield X[i*BATCH_SIZE:(i+1)*BATCH_SIZE, :], y[i*BATCH_SIZE:(i+1)*BATCH_SIZE]
+	X = np.zeros((BATCH_SIZE, TIMESTEPS, 5))
+        yield X[i*BATCH_SIZE:(i+1)*BATCH_SIZE,:], y[i*BATCH_SIZE:(i+1)*BATCH_SIZE]
         i += 1
         if (i+1)*BATCH_SIZE >= X.shape[0]:
             i = 0
 
+def small_generators(BATCH_SIZE, TIMESTEPS):
+	nb_classes = 2
+	X_train, y_train = load_data("datatraining.txt")
+	X_test, y_test = load_data("datatest.txt")
+	y_train = to_categorical(y_train, nb_classes)
+	y_test = to_categorical(y_test, nb_classes)
+	train_g = small_data_generator(X_train, y_train, BATCH_SIZE, TIMESTEPS)
+	test_g = small_data_generator(X_test, y_test, BATCH_SIZE, TIMESTEPS)
+	return train_g, test_g, X_train.shape, X_test.shape
