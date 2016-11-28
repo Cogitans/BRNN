@@ -80,13 +80,13 @@ def text_8_generator(CHAR_NUM, NB_SAMPLES):
     char_list = np.array(char_list)
     i = 1
     while True:
-        if ((NB_SAMPLES-1)*HOW_FAR + i*CHAR_NUM) > len(char_list) - 1:
-            i = 1
         X = np.zeros((NB_SAMPLES, CHAR_NUM), dtype='|S1')
         for s in np.arange(NB_SAMPLES):
             X[s, :] = char_list[s*HOW_FAR + (i-1)*CHAR_NUM:s*HOW_FAR + i*CHAR_NUM]
         yield X
         i += 1
+        if ((NB_SAMPLES-1)*HOW_FAR + i*CHAR_NUM) > len(char_list) - 1:
+            i = 1
 
 def test_8_generator(CHAR_NUM, NB_SAMPLES, value = None):
     CHAR_NUM = CHAR_NUM + 1
@@ -148,4 +148,31 @@ class Timer:
         self.silent = not self.silent
 
 T = Timer()
+
+def load_data(name):
+    PATH = "../datasets/"
+    train_data = []
+    train_labels = []
+    with open(PATH + name, "rb") as f:
+        lines = f.readlines()
+        for line in lines[1:]:
+            line_arr = line.strip().split(",")
+            train_labels.append(int(line_arr[-1]))
+            train_data.append(line_arr[2:-1])
+    return np.array(train_data), np.array(train_labels)
+
+X_train, y_train = load_data("datatraining.txt")
+X_test, y_test = load_data("datatest.txt")
+y_train = to_categorical(y_train, nb_classes)
+y_test = to_categorical(y_test, nb_classes)
+
+def small_data_generator(X, y):
+    assert X.shape[0] == y.shape[0]
+    assert BATCH_SIZE < X.shape[0]
+    i = 0
+    while True:
+        yield X[i*BATCH_SIZE:(i+1)*BATCH_SIZE, :], y[i*BATCH_SIZE:(i+1)*BATCH_SIZE]
+        i += 1
+        if (i+1)*BATCH_SIZE >= X.shape[0]:
+            i = 0
 
