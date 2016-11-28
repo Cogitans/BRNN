@@ -23,10 +23,10 @@ MODEL_PATH = DATA + "model.keras"
 SAVE_PATH = SAVE + "saved_quick.tf"
 LOSS_PATH = SAVE + "baseline_long/"
 
-batch_size = 64
-HIDDEN_SIZE = 1024
+batch_size = 128
+HIDDEN_SIZE = 512
 num_batch = None
-how_often = 50
+how_often = 100
 
 
 ##############################
@@ -147,5 +147,5 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = 64, GPU_FLAG=True, NUM_BATCH = None, SAVE
 # 				run(lr, val, rnn, timestep, False)
 
 
-for rnn in [SimpleRNN, GRU, Clockwork]:
-	run(1e-4, np.inf, rnn)
+for rnn in [GRU, Clockwork]:
+	run(1e0, np.inf, rnn)
