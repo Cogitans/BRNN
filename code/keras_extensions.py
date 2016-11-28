@@ -95,6 +95,9 @@ class Clockwork(SimpleRNN):
             self.states = [K.zeros((input_shape[0], self.output_dim)),
                           K.variable(np.full(((input_shape[0], self.output_dim)), initial_time))]
 
+    def preprocess_input(self, x):
+	return x
+
 
     def get_constants(self, x):
         return super(Clockwork, self).get_constants(x) + [self.periods]
@@ -102,16 +105,14 @@ class Clockwork(SimpleRNN):
     def step(self, x, states):
         # B_U and B_W are dropout weights
         prev_output, time_step, B_U, B_W, periods = states
-        time = K.max(time_step)
-        if self.consume_less == 'cpu':
-            h = x
-        else:
-            h = K.dot(x * B_W, self.W) + self.b
+        time = tf.cast(time_step[0, 0], tf.int32)
+        h = K.dot(x * B_W, self.W) + self.b
 
         output = self.activation(h + K.dot(prev_output * B_U, self.U))
         # note: switch evaluates the expression for each element so only
         # the modules which period matches the time step is activated here.
-        output = K.transpose(tf.select(K.equal(tf.mod(time, periods), 0.), K.transpose(output), K.transpose(prev_output)))
+ 	with tf.device('/cpu:0'):
+ 	       output = tf.select(tf.pack([K.equal(tf.cast(tf.mod(time, tf.cast(periods, tf.int32)), tf.float32), 0.0)]*output.get_shape()[0]), output, prev_output)
         return output, [output, time_step + 1]
 
 class MUT2(GRU):

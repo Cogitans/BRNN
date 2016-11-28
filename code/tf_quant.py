@@ -147,4 +147,4 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = 64, GPU_FLAG=True, NUM_BATCH = None, SAVE
 # 				run(lr, val, rnn, timestep, False)
 
 
-run(1e-4, np.inf, MUT1)
+run(1e0, np.inf, GRU)

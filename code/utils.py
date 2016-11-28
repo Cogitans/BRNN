@@ -6,7 +6,7 @@ from keras import backend as K
 from keras.callbacks import Callback
 from keras.initializations import uniform
 from keras.layers.recurrent import SimpleRNN
-import time, pickle
+import time, pickle, os
 
 START = ''
 DATA = "../datasets/"
@@ -14,6 +14,11 @@ TEXT8 = DATA + "text8"
 SHAKESPEARE = DATA + "shakespeare/s.txt"
 MODEL_PATH = DATA + "model.keras"
 TRAIN_PERCENT = 0.9999
+
+def mkdir(path):
+	if not os.path.exists(path):
+		os.makedirs(path)
+	return path
 
 def per_epoch(samples, batch_size):
     with open(TEXT8, "rb") as f:
@@ -32,6 +37,8 @@ def nary_uniform(shape, scale=1.5, name=None):
 def printProgress(place, place_per, how_often, loss):
     if place % how_often == 0:
         x = place // place_per
+	while place > place_per:
+		place -= place_per
         print("{0} percent through epoch {1}. Loss is {2}.".format(100*place/float(place_per), x, loss))
 
 def trinaryQuant(x):
@@ -55,6 +62,8 @@ def det_tri_quant(x):
     return x
 
 def one_hot(text, mapping, num_classes):
+    while num_classes % 8 != 0:
+	num_classes += 1
     data = np.zeros((text.shape[0], text.shape[1], num_classes))
     for (x,y), value in np.ndenumerate(text):
         data[x, y, mapping[value]] = 1
@@ -159,11 +168,16 @@ class Timer:
 
 T = Timer()
 
-def text_generator(path, CHAR_NUM, NB_SAMPLES, value = None):
+def text_generator(path, CHAR_NUM, NB_SAMPLES, value = None, percent = None, from_back = False):
     CHAR_NUM = CHAR_NUM + 1
     with open(path, "rb") as f:
         read_data = pickle.load(f)[0]
     char_list = [START] + list(read_data)
+    if percent != None:
+	if from_back:
+		char_list = char_list[-int(len(char_list)*percent):]
+	else:
+		char_list = char_list[:int(len(char_list)*percent)]
     HOW_FAR = len(char_list)/NB_SAMPLES
     char_list = np.array(char_list)
     i = 1
@@ -176,10 +190,12 @@ def text_generator(path, CHAR_NUM, NB_SAMPLES, value = None):
         if ((NB_SAMPLES-1)*HOW_FAR + i*CHAR_NUM) > len(char_list) - 1:
             i = 1
 
-def data_len(path, CHAR_NUM, NB_SAMPLES):
+def data_len(path, CHAR_NUM, NB_SAMPLES, percent = None):
     with open(path, "rb") as f:
-        read_data = pickle.load(f)[0]
-    return len(list(read_data)) / CHAR_NUM / NB_SAMPLES
+        read_data = list(pickle.load(f)[0])
+    if percent is not None:
+	read_data = read_data[:int(len(read_data)*percent)]
+    return len(read_data) / CHAR_NUM / NB_SAMPLES
 
 def small_generators(BATCH_SIZE, TIMESTEPS):
 	nb_classes = 2
