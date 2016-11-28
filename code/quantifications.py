@@ -13,7 +13,7 @@ def deterministic_binary(x):
 	pass
 
 def stochastic_binary(x):
-	pass
-
+	return tf.sign(tf.select(tf.equal(x, 0), 1, x))
+	
 def identity(x):
 	return x

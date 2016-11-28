@@ -114,7 +114,7 @@ class Clockwork(SimpleRNN):
         output = K.transpose(tf.select(K.equal(tf.mod(time, periods), 0.), K.transpose(output), K.transpose(prev_output)))
         return output, [output, time_step + 1]
 
-class MUT1(GRU):
+class MUT2(GRU):
 
     def preprocess_input(self, x):
         return x
@@ -132,7 +132,7 @@ class MUT1(GRU):
         h = h_temp * z + h_tm1 * (1 - z)
         return h, [h]
 
-class MUT2(GRU):
+class MUT1(GRU):
 
     def preprocess_input(self, x):
         return x
