@@ -18,30 +18,34 @@ K.manual_variable_initialization(True)
 
 DATA = "../datasets/"
 SAVE = "../results/"
-TEXT8 = DATA + "text8"
+TEXT = DATA + "shakespeare/s.txt"
 MODEL_PATH = DATA + "model.keras"
 SAVE_PATH = SAVE + "saved_quick.tf"
-LOSS_PATH = SAVE + "baseline_long/"
+LOSS_PATH = SAVE + "shakespeare/"
 
-batch_size = 128
-HIDDEN_SIZE = 512
+batch_size = 64
+HIDDEN_SIZE = 1024
 num_batch = None
-how_often = 100
+how_often = 50
 
 
 ##############################
 
 #### Data Establishing ####
 def run(LR, val, RNN_TYPE, TIMESTEPS = 64, GPU_FLAG=True, NUM_BATCH = None, SAVE_WEIGHTS = False, VERBOSE = True):
-	quantify = identity#deterministic_ternary(val)
+	quantify = identity
 	num_timesteps = TIMESTEPS
-	text_generator = text_8_generator(num_timesteps, batch_size)
-	test_generator = test_8_generator(num_timesteps, batch_size)
-	num_classes, c_to_l, l_to_c = char_mapping(TEXT8)
-	x_y_generator = data_target_generator(text_generator, c_to_l, num_classes)
-	text_x_y_generator = data_target_generator(test_generator, c_to_l, num_classes)
-	num_batch_in_epoch = per_epoch(batch_size, num_timesteps)
-	num_batch = 2 * num_batch_in_epoch if not NUM_BATCH else NUM_BATCH
+	num_classes, c_to_l, l_to_c = p_char_mapping(TEXT)
+
+	t_g = text_generator(TEXT, num_timesteps, batch_size)
+	test_g = text_generator(TEXT, num_timesteps, batch_size)
+
+	x_y_generator = data_target_generator(t_g, c_to_l, num_classes)
+	test_generator = data_target_generator(test_g, c_to_l, num_classes)
+
+	num_batch_in_epoch = data_len(TEXT, batch_size, num_timesteps)
+	num_batch = 1 * num_batch_in_epoch if not NUM_BATCH else NUM_BATCH
+
 	_init = ternary_choice(val) if val is not np.inf else "uniform"
 	i_init = ternary_choice(val) if val is not np.inf else "orthogonal"
 	###########################
@@ -111,7 +115,6 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = 64, GPU_FLAG=True, NUM_BATCH = None, SAVE
 			for assign in assignments:
 				assign.run()
 			X, y = x_y_generator.next()
-			test_X, test_Y = text_x_y_generator.next()
 			app.run(feed_dict={i: X, labels: y, learning_rate: lr})
 			for op in update_ops:
 				op.run(feed_dict={i: X})
@@ -121,14 +124,13 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = 64, GPU_FLAG=True, NUM_BATCH = None, SAVE
 				validation_loss = 0.0
 				validation_acc = 0.0
 				count = 0
-				while True:
-					(test_X, test_Y), done = text_x_y_generator.send(True)
-					curr_loss = loss.eval(feed_dict={i: test_X, labels: test_Y})
-					acc = acc_value.eval(feed_dict={i: test_X, labels: test_Y})
+				while count < num_batch_in_epoch:
+					test_X, test_y = test_generator.next()
+					curr_loss = loss.eval(feed_dict={i: test_X, labels: test_y})
+					acc = acc_value.eval(feed_dict={i: test_X, labels: test_y})
 					validation_loss += curr_loss
 					validation_acc += acc
 					count += 1
-					if done: break
 				losses.append(validation_loss / count)
 				accuracies.append(validation_acc / count)
 				if SAVE_WEIGHTS: saver.save(sess, SAVE_PATH)
@@ -147,4 +149,4 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = 64, GPU_FLAG=True, NUM_BATCH = None, SAVE
 # 				run(lr, val, rnn, timestep, False)
 
 
-run(1e-4, np.inf, MUT1)
+run(1e-4, np.inf, SimpleRNN, GPU_FLAG = False)

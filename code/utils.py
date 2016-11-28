@@ -6,11 +6,12 @@ from keras import backend as K
 from keras.callbacks import Callback
 from keras.initializations import uniform
 from keras.layers.recurrent import SimpleRNN
-import time
+import time, pickle
 
 START = ''
 DATA = "../datasets/"
 TEXT8 = DATA + "text8"
+SHAKESPEARE = DATA + "shakespeare/s.txt"
 MODEL_PATH = DATA + "model.keras"
 TRAIN_PERCENT = 0.9999
 
@@ -67,6 +68,14 @@ def char_mapping(path):
     with open(path, "rb") as f:
         read_data = f.readlines()
     chars = [START] + list(set(read_data[0]))
+    char_to_labels = {ch:i for i, ch in enumerate(chars)}
+    labels_to_char = {i:ch for i, ch in enumerate(chars)}
+    return len(chars), char_to_labels, labels_to_char
+
+def p_char_mapping(path):
+    with open(path, "rb") as f:
+        read_data = pickle.load(f)[0]
+    chars = [START] + list(set(read_data))
     char_to_labels = {ch:i for i, ch in enumerate(chars)}
     labels_to_char = {i:ch for i, ch in enumerate(chars)}
     return len(chars), char_to_labels, labels_to_char
@@ -150,30 +159,27 @@ class Timer:
 
 T = Timer()
 
-def load_data(name):
-    PATH = "../datasets/"
-    train_data = []
-    train_labels = []
-    with open(PATH + name, "rb") as f:
-        lines = f.readlines()
-        for line in lines[1:]:
-            line_arr = line.strip().split(",")
-            train_labels.append(int(line_arr[-1]))
-            train_data.append(line_arr[2:-1])
-    return np.array(train_data), np.array(train_labels)
-
-
-
-def small_data_generator(X, y, BATCH_SIZE, TIMESTEPS):
-    assert X.shape[0] == y.shape[0]
-    assert BATCH_SIZE < X.shape[0]
-    i = 0
+def text_generator(path, CHAR_NUM, NB_SAMPLES, value = None):
+    CHAR_NUM = CHAR_NUM + 1
+    with open(path, "rb") as f:
+        read_data = pickle.load(f)[0]
+    char_list = [START] + list(read_data)
+    HOW_FAR = len(char_list)/NB_SAMPLES
+    char_list = np.array(char_list)
+    i = 1
     while True:
-	X = np.zeros((BATCH_SIZE, TIMESTEPS, 5))
-        yield X[i*BATCH_SIZE:(i+1)*BATCH_SIZE,:], y[i*BATCH_SIZE:(i+1)*BATCH_SIZE]
+        X = np.zeros((NB_SAMPLES, CHAR_NUM), dtype='|S1')
+        for s in np.arange(NB_SAMPLES):
+            X[s, :] = char_list[s*HOW_FAR + (i-1)*CHAR_NUM:s*HOW_FAR + i*CHAR_NUM]
+        yield X
         i += 1
-        if (i+1)*BATCH_SIZE >= X.shape[0]:
-            i = 0
+        if ((NB_SAMPLES-1)*HOW_FAR + i*CHAR_NUM) > len(char_list) - 1:
+            i = 1
+
+def data_len(path, CHAR_NUM, NB_SAMPLES):
+    with open(path, "rb") as f:
+        read_data = pickle.load(f)[0]
+    return len(list(read_data)) / CHAR_NUM / NB_SAMPLES
 
 def small_generators(BATCH_SIZE, TIMESTEPS):
 	nb_classes = 2
