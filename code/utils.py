@@ -28,7 +28,7 @@ def per_epoch(samples, batch_size):
 def ternary_choice(val):
     def init(shape, scale=None, name=None):
         mat = np.random.choice([0, -val, val], shape)
-        return tf.Variable(mat, dtype=tf.float32)
+        return tf.Variable(mat, dtype=tf.float32, name=name)
     return init
 
 def nary_uniform(shape, scale=1.5, name=None):
