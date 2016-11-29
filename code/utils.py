@@ -6,6 +6,7 @@ from keras import backend as K
 from keras.callbacks import Callback
 from keras.initializations import uniform
 from keras.layers.recurrent import SimpleRNN
+from scipy.io import wavfile
 import time, pickle, os
 
 START = ''
@@ -41,25 +42,6 @@ def printProgress(place, place_per, how_often, loss):
 		place -= place_per
         print("{0} percent through epoch {1}. Loss is {2}.".format(100*place/float(place_per), x, loss))
 
-def trinaryQuant(x):
-    orig = x
-    signs = np.sign(x)
-    def hardSigmoid(x):
-        return np.clip((x + 1)/2, 0, 1)
-    x = hardSigmoid(np.abs(x))
-    probs = np.random.rand(*x.shape)
-    x[x < probs] = 0
-    x[x >= probs] = 1
-    return x * signs
-
-def identity(x):
-    return x
-
-def det_tri_quant(x):
-    x[x <= -.5] = -1
-    x[x >= .5] = 1
-    x[(-.5 < x) * (x < .5)] = 0
-    return x
 
 def one_hot(text, mapping, num_classes):
     while num_classes % 8 != 0:
@@ -206,3 +188,44 @@ def small_generators(BATCH_SIZE, TIMESTEPS):
 	train_g = small_data_generator(X_train, y_train, BATCH_SIZE, TIMESTEPS)
 	test_g = small_data_generator(X_test, y_test, BATCH_SIZE, TIMESTEPS)
 	return train_g, test_g, X_train.shape, X_test.shape
+
+########################
+# FOR MUSIC GENERATION #
+########################
+
+def music_generator(path, n_samples, n_timesteps, percent = None, from_back = False):
+    n_timesteps += 1
+    sample_rate, data = wavfile.read(path)
+    nb_p, data_w = data.shape
+    if percent is not None:
+        if from_back:
+            data = data[int(-percent*nb_p):]
+        else:
+            data = data[:int(percent*nb_p)]
+    nb_p, data_w = data.shape
+    offset = nb_p / n_samples 
+    i = 1
+    while True:
+        X = np.zeros((n_samples, n_timesteps, data_w))
+        for s in np.arange(n_samples):
+            X[s, :, :] = data[s*offset + (i-1)*n_timesteps:s*offset + i*n_timesteps, :] 
+        yield X 
+        if (n_samples-1)*offset + n_timesteps*(i+1) > nb_p:
+            i = 1
+
+def music_len(path, n_samples, n_timesteps, percent = None):
+    n_timesteps += 1
+    sample_rate, data = wavfile.read(path)
+    nb_p, data_w = data.shape
+    if percent is not None:
+        data = data[-int(percent*nb_p):]
+    nb_p, data_w = data.shape
+    return nb_p / n_samples / n_timesteps, data_w
+
+
+def music_pair_generator(g):
+    while True:
+        raw = g.next()
+        X = raw[:, :-1, :]
+        y = raw[:, 1:, :]
+        yield (X, y)
