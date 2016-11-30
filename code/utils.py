@@ -196,6 +196,9 @@ def small_generators(BATCH_SIZE, TIMESTEPS):
 def music_generator(path, n_samples, n_timesteps, percent = None, from_back = False):
     n_timesteps += 1
     sample_rate, data = wavfile.read(path)
+    maxes = max(np.amax(data, axis=1))
+    print(maxes)
+    data = data / maxes
     nb_p, data_w = data.shape
     if percent is not None:
         if from_back:

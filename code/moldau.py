@@ -7,7 +7,7 @@ from keras.layers.core import Dense, TimeDistributedDense
 from keras import backend as K
 from keras.layers.recurrent import SimpleRNN, GRU, LSTM
 from keras.layers.wrappers import TimeDistributed
-from keras.objectives import categorical_crossentropy
+from keras.objectives import categorical_crossentropy, mean_squared_error
 from keras.metrics import categorical_accuracy as accuracy
 import time
 import pickle
@@ -39,14 +39,14 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = 128, quant = None, GPU_FLAG=True, NUM_EPO
 	quantify = identity if quant is None else quant(val)
 	num_timesteps = TIMESTEPS
 
-	g = music_generator(MOLDAU, batch_size, num_timesteps, percent = .01)
-	test_g = music_generator(MOLDAU, batch_size, num_timesteps, percent = .001, from_back = True)
+	g = music_generator(MOLDAU, batch_size, num_timesteps, percent = .1)
+	test_g = music_generator(MOLDAU, batch_size, num_timesteps, percent = .01, from_back = True)
 
 	x_y_generator = music_pair_generator(g)
 	test_generator = music_pair_generator(test_g)
 
-	num_batch_in_epoch, num_classes = music_len(MOLDAU, batch_size, num_timesteps, percent = .01)
-	num_test, _ = music_len(MOLDAU, batch_size, num_timesteps, percent = .001)
+	num_batch_in_epoch, num_classes = music_len(MOLDAU, batch_size, num_timesteps, percent = .1)
+	num_test, _ = music_len(MOLDAU, batch_size, num_timesteps, percent = .01)
 	num_batch = NUM_EPOCH * num_batch_in_epoch if not NUM_BATCH else NUM_BATCH
 	how_often = num_batch_in_epoch // 4
 	
@@ -75,8 +75,7 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = 128, quant = None, GPU_FLAG=True, NUM_EPO
 	with tf.device('/gpu:2') if GPU_FLAG else tf.device('/cpu:0'):
 		layer3 = TimeDistributed(Dense(num_classes, init = _init))
 		o = layer3(h2)
-	loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(o, labels))
-	acc_value = accuracy(labels, o)	
+	loss = tf.reduce_mean(mean_squared_error(labels, o))
 
 	global_step = tf.Variable(0, trainable=False)
 
@@ -124,7 +123,6 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = 128, quant = None, GPU_FLAG=True, NUM_EPO
 
 	saver = tf.train.Saver()
 	losses = []
-	accuracies = []
 	#T.silence()
 	lr = LR
 
@@ -139,25 +137,18 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = 128, quant = None, GPU_FLAG=True, NUM_EPO
 			sess.run(clips)
 			if batch % how_often == 0:
 				validation_loss = 0.0
-				validation_acc = 0.0
 				count = 0
 				while count < num_test:
 					test_X, test_y = test_generator.next()
-					curr_loss, acc = sess.run([loss, acc_value], {i: test_X, labels: test_y})
+					curr_loss = sess.run(loss, {i: test_X, labels: test_y})
 					validation_loss += curr_loss
-					validation_acc += acc
 					count += 1
 				losses.append(validation_loss / count)
-				accuracies.append(validation_acc / count)
 				if SAVE_WEIGHTS: saver.save(sess, SAVE_PATH)
 				if VERBOSE: 
 					printProgress(batch, num_batch_in_epoch, how_often, losses[-1])
-					print("Accuracy at last batch: {0}".format(validation_acc / count))
 				with open(LOSS_PATH + "{0}_{1}_{2}_{3}.w".format(LR, val, RNN_TYPE.__name__, TIMESTEPS), "wb") as f:
-					pickle.dump([losses, accuracies], f)
-				if (validation_acc / count) < 0.005 and batch > num_batch / 2 or (validation_acc == 0 and batch > 1000):
-					print("Returning early due to failure.")
-					return
+					pickle.dump([losses], f)
 
 run(1e-4, np.inf, SimpleRNN, GPU_FLAG = False, NUM_EPOCH = 10)
 # run(1e-3, np.inf, GRU, NUM_EPOCH = 10)

@@ -15,11 +15,18 @@ def stochastic_ternary(val):
 		return tf.select(tf.less(rand, s), x_1, tf.zeros_like(x_1))
 	return to_ret
 
-def deterministic_binary(x):
-	pass
+def deterministic_binary(val):
+	def to_ret(x):
+		return tf.constant(val, tf.float32) * tf.sign(tf.select(tf.equal(x, 0.), tf.ones_like(x), x))
+	return to_ret
 
-def stochastic_binary(x):
-	return tf.sign(tf.select(tf.equal(x, 0), 1, x))
-	
+def stochastic_binary(val):
+	def to_ret(x):
+		correct = tf.sign(tf.select(tf.equal(x, 0.), tf.ones_like(x), x))
+		s = K.hard_sigmoid(tf.abs(x))
+		rand = tf.random_uniform(x.get_shape())
+		return tf.constant(val, tf.float32) * tf.select(tf.less(rand, s), correct, -1*correct)
+	return to_ret
+
 def identity(x):
 	return x

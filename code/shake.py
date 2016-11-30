@@ -23,7 +23,7 @@ SAVE = "../results/"
 TEXT = DATA + "shakespeare/s.txt"
 MODEL_PATH = DATA + "model.keras"
 SAVE_PATH = SAVE + "saved_quick.tf"
-LOSS_PATH = mkdir(SAVE + "shakespeare_base_full/")
+LOSS_PATH = mkdir(SAVE + "weights/")
 
 batch_size = 512
 HIDDEN_SIZE = 516
@@ -80,17 +80,18 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = 128, quant = None, GPU_FLAG=True, NUM_EPO
 	acc_value = accuracy(labels, o)	
 
 	global_step = tf.Variable(0, trainable=False)
-
 	to_quantize = []
 	if WHICH == "all":
 		to_quantize = tf.trainable_variables()
 	elif WHICH == "hidden":
 		for v in tf.trainable_variables():
-			if "U" in v.name.split("_"):
+			if "U" in v.name.split("_") or "U:0" in v.name.split("_"):
 				to_quantize.append(v)	
 	elif WHICH == "input":
 		for v in tf.trainable_variables():
-			if "W" in v.name.split("_"):
+			if "W" in v.name.split("_") or "W:0" in v.name.split("_"):
+				to_quantize.append(v)
+			if "b" in v.name.split("_") or "b:0" in v.name.split("_"):
 				to_quantize.append(v)
 	real_valued = []
 	var_to_real = {}
@@ -154,13 +155,19 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = 128, quant = None, GPU_FLAG=True, NUM_EPO
 				if VERBOSE: 
 					printProgress(batch, num_batch_in_epoch, how_often, losses[-1])
 					print("Accuracy at last batch: {0}".format(validation_acc / count))
-				with open(LOSS_PATH + "{0}_{1}_{2}_{3}.w".format(LR, val, RNN_TYPE.__name__, TIMESTEPS), "wb") as f:
+				with open(LOSS_PATH + "{0}_{1}_{2}_{3}_{4}.w".format(val, RNN_TYPE.__name__, TIMESTEPS, WHICH, quant.__name__ if quant is not None else ""), "wb") as f:
 					pickle.dump([losses, accuracies], f)
-				if (validation_acc / count) < 0.005 and batch > num_batch / 2 or (validation_acc == 0 and batch > 1000):
+				if (validation_acc / count) < 0.005 and batch > num_batch / 2 or (validation_acc == 0 and batch > num_batch / 5):
 					print("Returning early due to failure.")
 					return
-
-run(1e-4, np.inf, SimpleRNN, NUM_EPOCH = 40)
-run(1e-3, np.inf, GRU, NUM_EPOCH = 40)
-run(1e-3, np.inf, LSTM, NUM_EPOCH = 40)
-run(1e-4, np.inf, SimpleRNN, NUM_EPOCH = 40)
+		sess.run(assignments)
+		weights = [(w.name, w.eval()) for w in tf.trainable_variables()]
+		with open(LOSS_PATH + "weights.weights", "wb") as f:
+			pickle.dump([weights], f)
+lr = 1e-4
+#for val in [1, 0.5]:
+#	for rnn in [SimpleRNN, GRU]:
+#		for WHICH in ["all", "hidden", "input"]:
+#			for quant in [deterministic_binary, stochastic_binary, deterministic_ternary, stochastic_ternary]:
+#				run(lr, val, rnn, quant=quant, WHICH=WHICH, NUM_EPOCH = 20)
+run(lr, np.inf, GRU, NUM_EPOCH = 20)
