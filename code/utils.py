@@ -32,6 +32,12 @@ def ternary_choice(val):
         return tf.Variable(mat, dtype=tf.float32, name=name)
     return init
 
+def scale_identity(val):
+    def init(shape, scale=None, name=None):
+        mat = np.eye(*shape) * val
+        return tf.Variable(mat, dtype=tf.float32, name=name)
+    return init
+
 def nary_uniform(shape, scale=1.5, name=None):
     return K.random_uniform_variable(shape, -scale, scale, name=name)
 
