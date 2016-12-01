@@ -76,6 +76,7 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = 128, quant = None, GPU_FLAG=True, NUM_EPO
 		layer3 = TimeDistributed(Dense(num_classes, init = _init))
 		o = layer3(h2)
 	loss = tf.reduce_mean(mean_squared_error(labels, o))
+	acc_value = accuracy(labels, o)	
 
 	global_step = tf.Variable(0, trainable=False)
 
@@ -123,6 +124,7 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = 128, quant = None, GPU_FLAG=True, NUM_EPO
 
 	saver = tf.train.Saver()
 	losses = []
+	accuracies = []
 	#T.silence()
 	lr = LR
 
@@ -137,18 +139,25 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = 128, quant = None, GPU_FLAG=True, NUM_EPO
 			sess.run(clips)
 			if batch % how_often == 0:
 				validation_loss = 0.0
+				validation_acc = 0.0
 				count = 0
 				while count < num_test:
 					test_X, test_y = test_generator.next()
-					curr_loss = sess.run(loss, {i: test_X, labels: test_y})
+					curr_loss, acc = sess.run([loss, acc_value], {i: test_X, labels: test_y})
 					validation_loss += curr_loss
+					validation_acc += acc
 					count += 1
 				losses.append(validation_loss / count)
+				accuracies.append(validation_acc / count)
 				if SAVE_WEIGHTS: saver.save(sess, SAVE_PATH)
 				if VERBOSE: 
 					printProgress(batch, num_batch_in_epoch, how_often, losses[-1])
-				with open(LOSS_PATH + "{0}_{1}_{2}_{3}.w".format(LR, val, RNN_TYPE.__name__, TIMESTEPS), "wb") as f:
-					pickle.dump([losses], f)
+					print("Accuracy at last batch: {0}".format(validation_acc / count))
+				with open(LOSS_PATH + "{0}_{1}_{2}_{3}_{4}.w".format(val, RNN_TYPE.__name__, TIMESTEPS, WHICH, quant.__name__ if quant is not None else ""), "wb") as f:
+					pickle.dump([losses, accuracies], f)
+				if (validation_acc / count) < 0.005 and batch > num_batch / 2 or (validation_acc == 0 and batch > num_batch / 5):
+					print("Returning early due to failure.")
+					return
 
 run(1e-4, np.inf, SimpleRNN, GPU_FLAG = False, NUM_EPOCH = 10)
 # run(1e-3, np.inf, GRU, NUM_EPOCH = 10)
