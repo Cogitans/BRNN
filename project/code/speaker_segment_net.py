@@ -9,7 +9,10 @@ from keras.layers.embeddings import Embedding
 from keras.callbacks import Callback
 from keras.preprocessing import sequence
 from data_gen import *
-
+import tensorflow as tf
+from keras import backend as K
+sess = tf.Session()
+K.set_session(sess)
 
 DATA = """FIX"""
 TEXT8 = """FIX"""
@@ -203,21 +206,21 @@ def build_model(input_dim):
 def many_to_one_model():
     data_dim, word2idx, indx2word = word_mapping(shakespeare_raw_train_gen)
     timesteps = 32
-    hidden_dim = 64
+    hidden_dim = 2048
     adam = Adam(lr=3e-3)
-
-    encoder_a = Sequential()
-    encoder_a.add(Embedding(data_dim, hidden_dim, batch_input_shape=(BATCH_SIZE, timesteps)))
-    encoder_a.add(GRU(hidden_dim, stateful=True))
-
-    encoder_b = Sequential()
-    encoder_b.add(Embedding(data_dim, hidden_dim, batch_input_shape=(BATCH_SIZE, timesteps)))
-    encoder_b.add(GRU(hidden_dim, stateful=True))
-
-    model = Sequential()
-    model.add(Merge([encoder_a, encoder_b], mode=lambda x: x[0] - x[1], output_shape=lambda x: x[0]))
-    model.add(Dense(64, activation='relu', init='glorot_normal'))
-    model.add(Dense(2, activation='softmax'))
+    with tf.device('/gpu:0'):
+    	encoder_a = Sequential()
+   	encoder_a.add(Embedding(data_dim, hidden_dim, batch_input_shape=(BATCH_SIZE, timesteps)))
+    	encoder_a.add(GRU(hidden_dim, stateful=True))
+    with tf.device('/gpu:1'):
+    	encoder_b = Sequential()
+   	encoder_b.add(Embedding(data_dim, hidden_dim, batch_input_shape=(BATCH_SIZE, timesteps)))
+    	encoder_b.add(GRU(hidden_dim, stateful=True))
+	
+	model = Sequential()
+    	model.add(Merge([encoder_a, encoder_b], mode=lambda x: x[0] - x[1], output_shape=lambda x: x[0]))
+    	model.add(Dense(512, activation='relu', init='glorot_normal'))
+    	model.add(Dense(2, activation='softmax'))
 
     model.compile(loss='binary_crossentropy',
                     optimizer=adam,

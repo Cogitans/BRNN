@@ -56,7 +56,7 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = 128, quant = None, GPU_FLAG=True, NUM_EPO
 	how_often = num_batch_in_epoch // 4
 	
 	_init = ternary_choice(w_val)
-	i_init = scale_identity(u_val)
+	i_init = "identity"#scale_identity(u_val)
 	###########################
 
 	#### Model Definition ####
@@ -90,10 +90,10 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = 128, quant = None, GPU_FLAG=True, NUM_EPO
 	for v in tf.trainable_variables():
 		if "U" in v.name.split("_") or "U:0" in v.name.split("_"):
 			to_quantize_u.append(v)	
+		if "b" in v.name.split("_") or "b:0" in v.name.split("_"):
+			to_quantize_u.append(v)
 	for v in tf.trainable_variables():
 		if "W" in v.name.split("_") or "W:0" in v.name.split("_"):
-			to_quantize_w.append(v)
-		if "b" in v.name.split("_") or "b:0" in v.name.split("_"):
 			to_quantize_w.append(v)
 
 	real_valued_u = []
@@ -135,7 +135,7 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = 128, quant = None, GPU_FLAG=True, NUM_EPO
 			new_var = var_to_real_w[var] 
 		else:
 			new_var = var
-		grads_vars[k] = (clipped_grads[k], new_var)
+		grads_vars[k] = (tf.clip_by_value(grad, -1, 1), new_var)
 
 	app = optimizer.apply_gradients(grads_vars, global_step = global_step)
 
@@ -154,13 +154,11 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = 128, quant = None, GPU_FLAG=True, NUM_EPO
 	with sess.as_default():
 		init_op.run()
 		for batch in np.arange(num_batch):
-			sess.run(assignments_u)
-			sess.run(assignments_w)
+			sess.run([assignments_w, assignments_u])
 			X, y = x_y_generator.next()
 			app.run(feed_dict={i: X, labels: y, learning_rate: lr})
 			sess.run(update_ops, feed_dict={i: X})
-			sess.run(clips_u)
-			sess.run(clips_w)
+			sess.run([clips_u, clips_w])
 			if batch % how_often == 0:
 				validation_loss = 0.0
 				validation_acc = 0.0
@@ -177,19 +175,19 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = 128, quant = None, GPU_FLAG=True, NUM_EPO
 				if VERBOSE: 
 					printProgress(batch, num_batch_in_epoch, how_often, losses[-1])
 					print("Accuracy at last batch: {0}".format(validation_acc / count))
-				with open(LOSS_PATH + "{0}_{1}_{2}_{3}_{4}.w".format(val, RNN_TYPE.__name__, TIMESTEPS, WHICH, quant.__name__ if quant is not None else ""), "wb") as f:
+				with open(LOSS_PATH + "{0}_{1}_{2}_{3}_{4}.w".format("both", RNN_TYPE.__name__, TIMESTEPS, WHICH, quant.__name__ if quant is not None else ""), "wb") as f:
 					pickle.dump([losses, accuracies], f)
 				if (validation_acc / count) < 0.005 and batch > num_batch / 2 or (validation_acc == 0 and batch > num_batch / 5):
 					print("Returning early due to failure.")
 					return
-		# sess.run(assignments)
-		# weights = [(w.name, w.eval()) for w in tf.trainable_variables()]
-		# with open(LOSS_PATH + "weights.weights", "wb") as f:
-		# 	pickle.dump([weights], f)
-lr = 1e-4
+		sess.run([assignments_u, assignments_w])
+		weights = [(w.name, w.eval()) for w in tf.trainable_variables()]
+		with open(LOSS_PATH + "weights.weights", "wb") as f:
+		 	pickle.dump([weights], f)
+lr = 1e-3
 #for val in [1, 0.5]:
 #	for rnn in [SimpleRNN, GRU]:
 #		for WHICH in ["all", "hidden", "input"]:
 #			for quant in [deterministic_binary, stochastic_binary, deterministic_ternary, stochastic_ternary]:
 #				run(lr, val, rnn, quant=quant, WHICH=WHICH, NUM_EPOCH = 20)
-run(lr, [1e-2, 1e-4], GRU, quant=deterministic_ternary, WHICH="all", NUM_EPOCH = 1)
+run(lr, [1e-1, 1e-2], GRU, quant=deterministic_ternary, WHICH="all", NUM_EPOCH = 20)

@@ -4,7 +4,7 @@ from keras import backend as K
 
 def deterministic_ternary(val):
 	def to_ret(x):	
-		return tf.constant(val, tf.float32) * tf.sign(tf.round(x))
+		return tf.select(tf.less(tf.abs(x), tf.constant(val/2, tf.float32)), tf.zeros_like(x), tf.constant(val, tf.float32)*tf.sign(x))
 	return to_ret
 
 def stochastic_ternary(val):
