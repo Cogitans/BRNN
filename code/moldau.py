@@ -23,10 +23,10 @@ SAVE = "../results/"
 MOLDAU = DATA + "smetana/smetana.wav"
 MODEL_PATH = DATA + "model.keras"
 SAVE_PATH = SAVE + "saved_quick.tf"
-LOSS_PATH = mkdir(SAVE + "moldau_test/")
+LOSS_PATH = mkdir(SAVE + "generation_new/")
 
-batch_size = 512
-HIDDEN_SIZE = 516
+batch_size = 1
+HIDDEN_SIZE = 513
 num_batch = None
 how_often = 50
 
@@ -34,24 +34,26 @@ how_often = 50
 ##############################
 
 #### Data Establishing ####
-def run(LR, val, RNN_TYPE, TIMESTEPS = 128, quant = None, GPU_FLAG=True, NUM_EPOCH = 1, NUM_BATCH = None, SAVE_WEIGHTS = False, VERBOSE = True, WHICH = None):
+def run(LR, val, RNN_TYPE, TIMESTEPS = None, quant = None, GPU_FLAG=True, NUM_EPOCH = 1, NUM_BATCH = None, SAVE_WEIGHTS = False, VERBOSE = True, WHICH = None):
 	if quant is None: assert val is np.inf
 	quantify = identity if quant is None else quant(val)
 	num_timesteps = TIMESTEPS
-
-	g = music_generator(MOLDAU, batch_size, num_timesteps, percent = .1)
-	test_g = music_generator(MOLDAU, batch_size, num_timesteps, percent = .01, from_back = True)
+	
+	g = music_generator(MOLDAU, batch_size, num_timesteps, percent = .00005, offset = 0.1)
+	test_g = music_generator(MOLDAU, batch_size, num_timesteps, percent = .00005, offset = 0.1)
 
 	x_y_generator = music_pair_generator(g)
 	test_generator = music_pair_generator(test_g)
 
-	num_batch_in_epoch, num_classes = music_len(MOLDAU, batch_size, num_timesteps, percent = .1)
-	num_test, _ = music_len(MOLDAU, batch_size, num_timesteps, percent = .01)
+	num_batch_in_epoch, num_classes, train_timesteps = music_len(MOLDAU, batch_size, num_timesteps, percent = .00005, offset = 0.1)
+	num_test, _, test_timesteps = music_len(MOLDAU, batch_size, num_timesteps, percent = .00005, offset = 0.1)
 	num_batch = NUM_EPOCH * num_batch_in_epoch if not NUM_BATCH else NUM_BATCH
-	how_often = num_batch_in_epoch // 4
+	how_often = 1
 	
 	_init = "he_normal" if val == np.inf else ternary_choice(val)
-	i_init = "identity" 
+	i_init = "identity" if val == np.inf else scale_identity(val)
+	if num_timesteps is None:
+		num_timesteps = train_timesteps - 1
 	###########################
 
 	#### Model Definition ####
@@ -60,17 +62,17 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = 128, quant = None, GPU_FLAG=True, NUM_EPO
 	labels = tf.placeholder(tf.float32, shape=(batch_size, num_timesteps, num_classes), name="y")
 	with tf.device('/gpu:0') if GPU_FLAG else tf.device('/cpu:0'):
 		if RNN_TYPE == Clockwork:
-			layer1 = RNN_TYPE(HIDDEN_SIZE, init = _init, inner_init= i_init, periods=[1, 2, 4, 8, 16, 32, 64, 128], stateful=True, return_sequences=True)
+			layer1 = RNN_TYPE(HIDDEN_SIZE, init = _init, inner_init= i_init, periods=[1, 2, 4, 8, 16, 32, 64, 128, 256], stateful=True, return_sequences=True)
 			h1 = layer1(i)
 		else:
-			layer1 = RNN_TYPE(HIDDEN_SIZE, init = _init, inner_init = i_init ,stateful=True, return_sequences=True)
+			layer1 = RNN_TYPE(HIDDEN_SIZE, init = _init, inner_init = i_init, return_sequences=True)
 			h1 = layer1(i)
 	with tf.device('/gpu:1') if GPU_FLAG else tf.device('/cpu:0'):
 		if RNN_TYPE == Clockwork:
-			layer2 = RNN_TYPE(HIDDEN_SIZE, init = _init, inner_init= i_init, periods=[1, 2], stateful=True, return_sequences=True)
+			layer2 = RNN_TYPE(HIDDEN_SIZE, init = _init, inner_init= i_init, periods=[1, 2, 4, 8, 16, 32, 64, 128, 256], stateful=True, return_sequences=True)
 			h2 = layer2(h1)
 		else:
-			layer2 = RNN_TYPE(HIDDEN_SIZE, init= _init, inner_init= i_init, stateful=True, return_sequences=True)
+			layer2 = RNN_TYPE(HIDDEN_SIZE, init= _init, inner_init= i_init, return_sequences=True)
 			h2 = layer2(h1)
 	with tf.device('/gpu:2') if GPU_FLAG else tf.device('/cpu:0'):
 		layer3 = TimeDistributed(Dense(num_classes, init = _init))
@@ -99,8 +101,8 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = 128, quant = None, GPU_FLAG=True, NUM_EPO
 		real_valued.append(v)
 
 	update_ops = []
-	for old_value, new_value in layer1.updates + layer2.updates:
-		update_ops.append(tf.assign(old_value, new_value).op)
+#	for old_value, new_value in layer1.updates + layer2.updates:
+#		update_ops.append(tf.assign(old_value, new_value).op)
 
 
 	##########################
@@ -134,7 +136,7 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = 128, quant = None, GPU_FLAG=True, NUM_EPO
 		for batch in np.arange(num_batch):
 			sess.run(assignments)
 			X, y = x_y_generator.next()
-			app.run(feed_dict={i: X, labels: y, learning_rate: lr})
+			app.run(feed_dict={i: np.zeros_like(X), labels: y, learning_rate: lr})
 			sess.run(update_ops, feed_dict={i: X})
 			sess.run(clips)
 			if batch % how_often == 0:
@@ -159,7 +161,7 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = 128, quant = None, GPU_FLAG=True, NUM_EPO
 					print("Returning early due to failure.")
 					return
 
-run(1e-4, np.inf, SimpleRNN, GPU_FLAG = False, NUM_EPOCH = 10)
-# run(1e-3, np.inf, GRU, NUM_EPOCH = 10)
-# run(1e-3, np.inf, LSTM, NUM_EPOCH = 10)
-# run(1e-4, np.inf, SimpleRNN, NUM_EPOCH = 10)
+run(1e-4, 1e-1, SimpleRNN, quant = deterministic_ternary, NUM_EPOCH = 200)
+run(1e-4, 1e-1, GRU, quant = deterministic_ternary, NUM_EPOCH = 200)
+run(1e-4, 1e-1, LSTM, quant = deterministic_ternary, NUM_EPOCH = 200)
+run(1e-3, 1e-1, Clockwork, quant = deterministic_ternary, NUM_EPOCH = 200)

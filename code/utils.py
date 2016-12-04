@@ -199,20 +199,31 @@ def small_generators(BATCH_SIZE, TIMESTEPS):
 # FOR MUSIC GENERATION #
 ########################
 
-def music_generator(path, n_samples, n_timesteps, percent = None, from_back = False):
-    n_timesteps += 1
+def music_generator(path, n_samples, n_timesteps, percent = None, from_back = False, offset = None):
     sample_rate, data = wavfile.read(path)
-    maxes = max(np.amax(data, axis=1))
-    print(maxes)
+    data = data.astype(float)    
+    maxes = max(np.amax(data, axis=0))
     data = data / maxes
     nb_p, data_w = data.shape
     if percent is not None:
-        if from_back:
-            data = data[int(-percent*nb_p):]
-        else:
-            data = data[:int(percent*nb_p)]
+	if offset is not None:
+		start = int(offset * nb_p)
+		end = int(percent * nb_p)
+		print(percent, offset, start, end)
+        	if from_back:
+            		data = data[-start:-start+end, :]
+        	else:
+            		data = data[start:start+end, :]
+	else:
+        	if from_back:
+            		data = data[int(-percent*nb_p):, :]
+        	else:
+            		data = data[:int(percent*nb_p), :]
     nb_p, data_w = data.shape
     offset = nb_p / n_samples 
+    if n_timesteps == None:
+	n_samples = 1
+	n_timesteps = nb_p
     i = 1
     while True:
         X = np.zeros((n_samples, n_timesteps, data_w))
@@ -222,14 +233,27 @@ def music_generator(path, n_samples, n_timesteps, percent = None, from_back = Fa
         if (n_samples-1)*offset + n_timesteps*(i+1) > nb_p:
             i = 1
 
-def music_len(path, n_samples, n_timesteps, percent = None):
-    n_timesteps += 1
+def music_len(path, n_samples, n_timesteps, percent = None, from_back = False, offset = None):
     sample_rate, data = wavfile.read(path)
     nb_p, data_w = data.shape
     if percent is not None:
-        data = data[-int(percent*nb_p):]
+	if offset is not None:
+		start = int(offset * nb_p)
+		end = int(percent * nb_p)
+        	if from_back:
+            		data = data[-start:-start+end]
+        	else:
+            		data = data[start:start+end]
+	else:
+        	if from_back:
+            		data = data[int(-percent*nb_p):]
+        	else:
+            		data = data[:int(percent*nb_p)]
     nb_p, data_w = data.shape
-    return nb_p / n_samples / n_timesteps, data_w
+    if n_timesteps == None:
+	n_samples = 1
+	n_timesteps = nb_p
+    return nb_p / n_samples / n_timesteps, data_w, nb_p
 
 
 def music_pair_generator(g):

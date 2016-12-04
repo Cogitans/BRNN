@@ -23,7 +23,7 @@ SAVE = "../results/"
 TEXT = DATA + "shakespeare/s.txt"
 MODEL_PATH = DATA + "model.keras"
 SAVE_PATH = SAVE + "saved_quick.tf"
-LOSS_PATH = mkdir(SAVE + "weights/")
+LOSS_PATH = mkdir(SAVE + "shakespeare_base_disc_fixed/")
 
 batch_size = 512
 HIDDEN_SIZE = 516
@@ -155,19 +155,15 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = 128, quant = None, GPU_FLAG=True, NUM_EPO
 				if VERBOSE: 
 					printProgress(batch, num_batch_in_epoch, how_often, losses[-1])
 					print("Accuracy at last batch: {0}".format(validation_acc / count))
-				with open(LOSS_PATH + "{0}_{1}_{2}_{3}_{4}.w".format(val, RNN_TYPE.__name__, TIMESTEPS, WHICH, quant.__name__ if quant is not None else ""), "wb") as f:
+				with open(LOSS_PATH + "{0}_{1}_{2}_{3}_{4}.w".format(val, RNN_TYPE.__name__, TIMESTEPS, WHICH, quant.__name__), "wb") as f:
 					pickle.dump([losses, accuracies], f)
 				if (validation_acc / count) < 0.005 and batch > num_batch / 2 or (validation_acc == 0 and batch > num_batch / 5):
 					print("Returning early due to failure.")
 					return
-		sess.run(assignments)
-		weights = [(w.name, w.eval()) for w in tf.trainable_variables()]
-		with open(LOSS_PATH + "weights.weights", "wb") as f:
-			pickle.dump([weights], f)
 lr = 1e-4
-#for val in [1, 0.5]:
-#	for rnn in [SimpleRNN, GRU]:
-#		for WHICH in ["all", "hidden", "input"]:
-#			for quant in [deterministic_binary, stochastic_binary, deterministic_ternary, stochastic_ternary]:
-#				run(lr, val, rnn, quant=quant, WHICH=WHICH, NUM_EPOCH = 20)
-run(lr, np.inf, GRU, NUM_EPOCH = 20)
+for val in [1, 0.5]:
+	for rnn in [SimpleRNN, GRU]:
+		for WHICH in ["all", "hidden", "input"]:
+			for quant in [deterministic_binary, stochastic_binary, deterministic_ternary, stochastic_ternary]:
+				run(lr, val, rnn, quant=quant, WHICH=WHICH, NUM_EPOCH = 20)
+
