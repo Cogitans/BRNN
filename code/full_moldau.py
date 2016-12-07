@@ -56,6 +56,7 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = None, quant = None, GPU_FLAG=True, NUM_EP
 	how_often = 1
 	
 	_init = "he_normal" if val == np.inf else ternary_choice(w_val)
+	b_init = "zero" if val == np.inf else ternary_choice(u_val)
 	i_init = "identity" if val == np.inf else scale_identity(u_val)
 	if num_timesteps is None:
 		num_timesteps = train_timesteps - 1
@@ -67,17 +68,17 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = None, quant = None, GPU_FLAG=True, NUM_EP
 	labels = tf.placeholder(tf.float32, shape=(batch_size, num_timesteps, num_classes), name="y")
 	with tf.device('/gpu:0') if GPU_FLAG else tf.device('/cpu:0'):
 		if RNN_TYPE == Clockwork:
-			layer1 = RNN_TYPE(HIDDEN_SIZE, init = _init, inner_init= i_init, periods=[1, 2, 4, 8, 16, 32, 64, 128, 256], return_sequences=True)
+			layer1 = RNN_TYPE(HIDDEN_SIZE, init = _init, inner_init= i_init, bias_init = b_init, periods=[1, 2, 4, 8, 16, 32, 64, 128, 256], return_sequences=True)
 			h1 = layer1(i)
 		else:
-			layer1 = RNN_TYPE(HIDDEN_SIZE, init = _init, inner_init = i_init, return_sequences=True)
+			layer1 = RNN_TYPE(HIDDEN_SIZE, init = _init, inner_init = i_init, bias_init = b_init, return_sequences=True)
 			h1 = layer1(i)
 	with tf.device('/gpu:1') if GPU_FLAG else tf.device('/cpu:0'):
 		if RNN_TYPE == Clockwork:
-			layer2 = RNN_TYPE(HIDDEN_SIZE, init = _init, inner_init= i_init, periods=[1, 2, 4, 8, 16, 32, 64, 128, 256], return_sequences=True)
+			layer2 = RNN_TYPE(HIDDEN_SIZE, init = _init, inner_init= i_init, bias_init = b_init, periods=[1, 2, 4, 8, 16, 32, 64, 128, 256], return_sequences=True)
 			h2 = layer2(h1)
 		else:
-			layer2 = RNN_TYPE(HIDDEN_SIZE, init= _init, inner_init= i_init, return_sequences=True)
+			layer2 = RNN_TYPE(HIDDEN_SIZE, init= _init, inner_init= i_init, bias_init = b_init, return_sequences=True)
 			h2 = layer2(h1)
 	with tf.device('/gpu:2') if GPU_FLAG else tf.device('/cpu:0'):
 		layer3 = TimeDistributed(Dense(num_classes, init = _init))
@@ -90,7 +91,7 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = None, quant = None, GPU_FLAG=True, NUM_EP
 	to_quantize_w = []
 	to_quantize_u = []
 	for v in tf.trainable_variables():
-		if "U" in v.name.split("_") or "U:0" in v.name.split("_"):	
+		if "U" in v.name.split("_") or "U:0" in v.name.split("_") or "b" in v.name.split("_") or "b:0" in v.name.split("_") :	
 			to_quantize_u.append(v)	
 		else:	
 			to_quantize_w.append(v)
@@ -125,7 +126,7 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = None, quant = None, GPU_FLAG=True, NUM_EP
 		vars_.append(v)
 		grads.append(g)
 	
-	clipped_grads, global_norm = tf.clip_by_global_norm(grads, 1)
+	#clipped_grads, global_norm = tf.clip_by_global_norm(grads, 1)
 	for k, (grad, var) in enumerate(grads_vars):
 		if var in to_quantize_u:
 			new_var = var_to_real_u[var]
@@ -133,7 +134,7 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = None, quant = None, GPU_FLAG=True, NUM_EP
 			new_var = var_to_real_w[var]
 		else:	
 			new_var = var
-		grads_vars[k] = (tf.clip_by_value(grad, -1, 1), new_var)
+		grads_vars[k] = (tf.clip_by_value(grad, -10, 10), new_var)
 	#	grads_vars[k] = (clipped_grads[k], var_to_real[var] if var in to_quantize else var)
 	app = optimizer.apply_gradients(grads_vars, global_step = global_step)
 
@@ -155,10 +156,12 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = None, quant = None, GPU_FLAG=True, NUM_EP
 		for batch in np.arange(num_batch):
 			sess.run([assignments_u, assignments_w])
 			X, y = x_y_generator.next()
-			fd = {i: np.ones_like(X), labels: y, learning_rate: lr}
+			fd = {i: np.zeros_like(X), labels: y, learning_rate: lr}
 			app.run(feed_dict = fd)
-			print(layer1.b.eval())#feed_dict=fd))
-			sess.run(update_ops, feed_dict={i: X})
+			print(vars_[1].eval())
+			print(var_to_real_u[vars_[1]].eval())
+			print(grads[1].eval(feed_dict=fd))
+			sess.run(update_ops, feed_dict=fd)
 			sess.run([clips_w, clips_u])
 			if batch % how_often == 0:
 				validation_loss = 0.0
@@ -166,7 +169,7 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = None, quant = None, GPU_FLAG=True, NUM_EP
 				count = 0
 				while count < num_test:
 					test_X, test_y = test_generator.next()
-					curr_loss, acc = sess.run([loss, acc_value], {i: test_X, labels: test_y})
+					curr_loss, acc = sess.run([loss, acc_value], {i: np.zeros_like(test_X), labels: test_y})
 					validation_loss += curr_loss
 					validation_acc += acc
 					count += 1
@@ -182,7 +185,7 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = None, quant = None, GPU_FLAG=True, NUM_EP
 					print("Returning early due to failure.")
 					return
 
-run(1e-4, [0.5, 0.125], Clockwork, quant = deterministic_ternary, WHICH = "all", NUM_EPOCH = 20)
+run(1e-3, [0.5, 0.125], BiasVRNN, GPU_FLAG = False, quant = deterministic_ternary, WHICH = "all", NUM_EPOCH = 20)
 #run(1e-4, [1e-1, 1e-2], GRU, quant = deterministic_ternary, WHICH = "all", NUM_EPOCH = 200)
 #run(1e-4, [1e-1, 1e-2], LSTM, quant = deterministic_ternary,  WHICH = "all",NUM_EPOCH = 200)
 #run(1e-3, [1e-1, 1e-2], Clockwork, quant = deterministic_ternary, WHICH = "all", NUM_EPOCH = 200)

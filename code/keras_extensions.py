@@ -5,6 +5,9 @@ from keras import backend as K
 import matplotlib.pyplot as plt
 import time
 import tensorflow as tf
+from keras import backend as K
+from keras import activations, initializations, regularizers
+from keras.engine import Layer, InputSpec
 
 class Clockwork(SimpleRNN):
     """From githubnemo"""
@@ -29,7 +32,7 @@ class Clockwork(SimpleRNN):
     '''
     def __init__(self, output_dim, periods=[1], **kwargs):
         self.output_dim = output_dim
-
+        self.bias_init = bias_init
         assert len(periods) > 0 and output_dim % len(periods) == 0, (
             'Output dimension ({}) must be divisible '.format(output_dim) +
             'by the number of periods ({}) since modules are equally sized '.format(len(periods)) +
@@ -55,37 +58,37 @@ class Clockwork(SimpleRNN):
         super(Clockwork, self).build(input_shape)
 	
 	#####
-#        self.input_spec = [InputSpec(shape=input_shape)]
-#        if self.stateful:
-#            self.reset_states()
-#        else:
-            # initial states: all-zero tensor of shape (output_dim)
-#            self.states = [None]
-#        input_dim = input_shape[2]
-#        self.input_dim = input_dim
-#
-#        self.W = self.init((input_dim, self.output_dim),
-#                           name='{}_W'.format(self.name))
-#        self.U = self.inner_init((self.output_dim, self.output_dim),
-#                                 name='{}_U'.format(self.name))
-	self.b = self.init((self.output_dim,), name="{}_b".format(self.name))
-#
- #       self.regularizers = []
-#        if self.W_regularizer:
- #           self.W_regularizer.set_param(self.W)
-#            self.regularizers.append(self.W_regularizer)
- #       if self.U_regularizer:
-  #          self.U_regularizer.set_param(self.U)
-   #         self.regularizers.append(self.U_regularizer)
-    #    if self.b_regularizer:
-     #       self.b_regularizer.set_param(self.b)
-      #      self.regularizers.append(self.b_regularizer)
+        self.input_spec = [InputSpec(shape=input_shape)]
+        if self.stateful:
+           self.reset_states()
+        else:
+        #    initial states: all-zero tensor of shape (output_dim)
+           self.states = [None]
+        input_dim = input_shape[2]
+        self.input_dim = input_dim
 
-       # self.trainable_weights = [self.W, self.U, self.b]
+        self.W = self.init((input_dim, self.output_dim),
+                          name='{}_W'.format(self.name))
+        self.U = self.inner_init((self.output_dim, self.output_dim),
+                                name='{}_U'.format(self.name))
+        self.b = self.bias_init((self.output_dim,), name="{}_b".format(self.name))
 
-        #if self.initial_weights is not None:
-         #   self.set_weights(self.initial_weights)
-          #  del self.initial_weights
+        self.regularizers = []
+        if self.W_regularizer:
+           self.W_regularizer.set_param(self.W)
+           self.regularizers.append(self.W_regularizer)
+        if self.U_regularizer:
+           self.U_regularizer.set_param(self.U)
+           self.regularizers.append(self.U_regularizer)
+        if self.b_regularizer:
+           self.b_regularizer.set_param(self.b)
+           self.regularizers.append(self.b_regularizer)
+
+        self.trainable_weights = [self.W, self.U, self.b]
+
+        if self.initial_weights is not None:
+           self.set_weights(self.initial_weights)
+           del self.initial_weights
 	#####
 
         # Make sure modules are shortcut from slow to high periods.
@@ -127,7 +130,7 @@ class Clockwork(SimpleRNN):
                         np.full(((input_shape[0], self.output_dim)), initial_time))
         else:
             self.states = [K.zeros((input_shape[0], self.output_dim)),
-                          K.variable(np.full(((input_shape[0], self.output_dim)), initial_time))]
+                          K.variable(np.full(((input_shape[0], self.output_dim)), initial_time), name="Timestep")]
 
     def preprocess_input(self, x):
 	return x
@@ -184,3 +187,47 @@ class MUT1(GRU):
         h_temp = K.tanh(K.dot(r * h_tm1, self.U_h) + K.tanh(x) + self.b_h)
         h = h_temp * z + h_tm1 * (1 - z)
         return h, [h]
+
+class BiasVRNN(SimpleRNN):
+    def __init__(self, output_dim,
+                 init='glorot_uniform', inner_init='orthogonal',
+                 activation='tanh',
+                 W_regularizer=None, U_regularizer=None, b_regularizer=None,
+                 dropout_W=0., dropout_U=0., bias_init = None,**kwargs):
+        self.bias_init = bias_init
+        super(BiasVRNN, self).__init__(output_dim, init, inner_init,
+                 activation, W_regularizer, U_regularizer, b_regularizer,
+                 dropout_W, dropout_U, **kwargs)
+
+    def build(self, input_shape):
+        self.input_spec = [InputSpec(shape=input_shape)]
+        if self.stateful:
+            self.reset_states()
+        else:
+            # initial states: all-zero tensor of shape (output_dim)
+            self.states = [None]
+        input_dim = input_shape[2]
+        self.input_dim = input_dim
+
+        self.W = self.init((input_dim, self.output_dim),
+                           name='{}_W'.format(self.name))
+        self.U = self.inner_init((self.output_dim, self.output_dim),
+                                 name='{}_U'.format(self.name))
+        self.b = self.bias_init((self.output_dim,), name='{}_b'.format(self.name))
+
+        self.regularizers = []
+        if self.W_regularizer:
+            self.W_regularizer.set_param(self.W)
+            self.regularizers.append(self.W_regularizer)
+        if self.U_regularizer:
+            self.U_regularizer.set_param(self.U)
+            self.regularizers.append(self.U_regularizer)
+        if self.b_regularizer:
+            self.b_regularizer.set_param(self.b)
+            self.regularizers.append(self.b_regularizer)
+
+        self.trainable_weights = [self.W, self.U, self.b]
+
+        if self.initial_weights is not None:
+            self.set_weights(self.initial_weights)
+            del self.initial_weights
