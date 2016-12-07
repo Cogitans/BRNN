@@ -209,7 +209,6 @@ def music_generator(path, n_samples, n_timesteps, percent = None, from_back = Fa
 	if offset is not None:
 		start = int(offset * nb_p)
 		end = int(percent * nb_p)
-		print(percent, offset, start, end)
         	if from_back:
             		data = data[-start:-start+end, :]
         	else:

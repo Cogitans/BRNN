@@ -49,10 +49,44 @@ class Clockwork(SimpleRNN):
             module_mask[i*n:, i*n:(i+1)*n] = 1
             periods[i*n:(i+1)*n] = t
 
-        module_mask = K.variable(module_mask, name='module_mask')
-        self.periods = K.variable(periods, name='periods')
+        module_mask = tf.Variable(module_mask, name='module_mask', trainable=False,dtype = tf.float32)
+        self.periods = tf.Variable(periods, name='periods', trainable=False, dtype=tf.float32)
 
         super(Clockwork, self).build(input_shape)
+	
+	#####
+#        self.input_spec = [InputSpec(shape=input_shape)]
+#        if self.stateful:
+#            self.reset_states()
+#        else:
+            # initial states: all-zero tensor of shape (output_dim)
+#            self.states = [None]
+#        input_dim = input_shape[2]
+#        self.input_dim = input_dim
+#
+#        self.W = self.init((input_dim, self.output_dim),
+#                           name='{}_W'.format(self.name))
+#        self.U = self.inner_init((self.output_dim, self.output_dim),
+#                                 name='{}_U'.format(self.name))
+	self.b = self.init((self.output_dim,), name="{}_b".format(self.name))
+#
+ #       self.regularizers = []
+#        if self.W_regularizer:
+ #           self.W_regularizer.set_param(self.W)
+#            self.regularizers.append(self.W_regularizer)
+ #       if self.U_regularizer:
+  #          self.U_regularizer.set_param(self.U)
+   #         self.regularizers.append(self.U_regularizer)
+    #    if self.b_regularizer:
+     #       self.b_regularizer.set_param(self.b)
+      #      self.regularizers.append(self.b_regularizer)
+
+       # self.trainable_weights = [self.W, self.U, self.b]
+
+        #if self.initial_weights is not None:
+         #   self.set_weights(self.initial_weights)
+          #  del self.initial_weights
+	#####
 
         # Make sure modules are shortcut from slow to high periods.
         # Placed after super().build since it fills U with values which
@@ -71,7 +105,7 @@ class Clockwork(SimpleRNN):
            input_length = self.input_spec[0].shape[1]
            initial_states[-1] = float(input_length)
         else:
-           initial_states[-1] = K.variable(np.zeros_like(initial_states[0]))
+           initial_states[-1] = tf.Variable(np.zeros(initial_states[0].get_shape()), name="Timestep",dtype=tf.float32,trainable=False)
         return initial_states
 
     def reset_states(self):

@@ -23,7 +23,7 @@ SAVE = "../results/"
 MOLDAU = DATA + "smetana/smetana.wav"
 MODEL_PATH = DATA + "model.keras"
 SAVE_PATH = SAVE + "saved_quick.tf"
-LOSS_PATH = mkdir(SAVE + "testing/")
+LOSS_PATH = mkdir(SAVE + "generation_new/")
 
 batch_size = 1
 HIDDEN_SIZE = 513
@@ -36,11 +36,16 @@ how_often = 50
 #### Data Establishing ####
 def run(LR, val, RNN_TYPE, TIMESTEPS = None, quant = None, GPU_FLAG=True, NUM_EPOCH = 1, NUM_BATCH = None, SAVE_WEIGHTS = False, VERBOSE = True, WHICH = None):
 	if quant is None: assert val is np.inf
-	quantify = identity if quant is None else quant(val)
+
 	num_timesteps = TIMESTEPS
 	
 	g = music_generator(MOLDAU, batch_size, num_timesteps, percent = .00005, offset = 0.1)
 	test_g = music_generator(MOLDAU, batch_size, num_timesteps, percent = .00005, offset = 0.1)
+
+	w_val, u_val = val
+	quantify_w = quant(w_val)
+	quantify_u = quant(u_val)
+
 
 	x_y_generator = music_pair_generator(g)
 	test_generator = music_pair_generator(test_g)
@@ -50,8 +55,8 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = None, quant = None, GPU_FLAG=True, NUM_EP
 	num_batch = NUM_EPOCH * num_batch_in_epoch if not NUM_BATCH else NUM_BATCH
 	how_often = 1
 	
-	_init = "he_normal" if val == np.inf else ternary_choice(val)
-	i_init = "identity" if val == np.inf else scale_identity(val)
+	_init = "he_normal" if val == np.inf else ternary_choice(w_val)
+	i_init = "identity" if val == np.inf else scale_identity(u_val)
 	if num_timesteps is None:
 		num_timesteps = train_timesteps - 1
 	###########################
@@ -62,8 +67,7 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = None, quant = None, GPU_FLAG=True, NUM_EP
 	labels = tf.placeholder(tf.float32, shape=(batch_size, num_timesteps, num_classes), name="y")
 	with tf.device('/gpu:0') if GPU_FLAG else tf.device('/cpu:0'):
 		if RNN_TYPE == Clockwork:
-			layer1 = RNN_TYPE(HIDDEN_SIZE, init = _init, inner_init= i_init, periods=[1, 2, 4, 8, 16, 32, 64, 128, 256], stateful = True, return_sequences=True)
-			print(i)
+			layer1 = RNN_TYPE(HIDDEN_SIZE, init = _init, inner_init= i_init, periods=[1, 2, 4, 8, 16, 32, 64, 128, 256], return_sequences=True)
 			h1 = layer1(i)
 		else:
 			layer1 = RNN_TYPE(HIDDEN_SIZE, init = _init, inner_init = i_init, return_sequences=True)
@@ -83,23 +87,26 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = None, quant = None, GPU_FLAG=True, NUM_EP
 
 	global_step = tf.Variable(0, trainable=False)
 
-	to_quantize = []
-	if WHICH == "all":
-		to_quantize = tf.trainable_variables()
-	elif WHICH == "hidden":
-		for v in tf.trainable_variables():
-			if "U" in v.name.split("_"):
-				to_quantize.append(v)	
-	elif WHICH == "input":
-		for v in tf.trainable_variables():
-			if "W" in v.name.split("_"):
-				to_quantize.append(v)
-	real_valued = []
-	var_to_real = {}
-	for w in to_quantize:
+	to_quantize_w = []
+	to_quantize_u = []
+	for v in tf.trainable_variables():
+		if "U" in v.name.split("_") or "U:0" in v.name.split("_"):	
+			to_quantize_u.append(v)	
+		else:	
+			to_quantize_w.append(v)
+	real_valued_u = []
+	var_to_real_u = {}
+	for w in to_quantize_u:
 		v = tf.Variable(w.initialized_value(), dtype=tf.float32, trainable=False)
-		var_to_real[w] = v 
-		real_valued.append(v)
+		var_to_real_u[w] = v 
+		real_valued_u.append(v)
+
+	real_valued_w = []
+	var_to_real_w = {}
+	for w in to_quantize_w:
+		v = tf.Variable(w.initialized_value(), dtype=tf.float32, trainable=False)
+		var_to_real_w[w] = v 
+		real_valued_w.append(v)
 
 	update_ops = []
 #	for old_value, new_value in layer1.updates + layer2.updates:
@@ -120,10 +127,21 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = None, quant = None, GPU_FLAG=True, NUM_EP
 	
 	clipped_grads, global_norm = tf.clip_by_global_norm(grads, 1)
 	for k, (grad, var) in enumerate(grads_vars):
-		grads_vars[k] = (clipped_grads[k], var_to_real[var] if var in to_quantize else var)
+		if var in to_quantize_u:
+			new_var = var_to_real_u[var]
+		elif var in to_quantize_w:
+			new_var = var_to_real_w[var]
+		else:	
+			new_var = var
+		grads_vars[k] = (tf.clip_by_value(grad, -1, 1), new_var)
+	#	grads_vars[k] = (clipped_grads[k], var_to_real[var] if var in to_quantize else var)
 	app = optimizer.apply_gradients(grads_vars, global_step = global_step)
-	assignments = [tf.assign(w, quantify(var_to_real[w])) for w in to_quantize]
-	clips = [tf.assign(w, tf.clip_by_value(w, -val, val)).op for w in real_valued]
+
+	assignments_u = [tf.assign(w, quantify_u(var_to_real_u[w])) for w in to_quantize_u]
+	clips_u = [tf.assign(w, tf.clip_by_value(w, -u_val, u_val)).op for w in real_valued_u]
+
+	assignments_w = [tf.assign(w, quantify_w(var_to_real_w[w])) for w in to_quantize_w]
+	clips_w = [tf.assign(w, tf.clip_by_value(w, -w_val, w_val)).op for w in real_valued_w]
 
 	saver = tf.train.Saver()
 	losses = []
@@ -135,11 +153,13 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = None, quant = None, GPU_FLAG=True, NUM_EP
 	with sess.as_default():
 		init_op.run()
 		for batch in np.arange(num_batch):
-			sess.run(assignments)
+			sess.run([assignments_u, assignments_w])
 			X, y = x_y_generator.next()
-			app.run(feed_dict={i: np.zeros_like(X), labels: y, learning_rate: lr})
+			fd = {i: np.ones_like(X), labels: y, learning_rate: lr}
+			app.run(feed_dict = fd)
+			print(layer1.b.eval())#feed_dict=fd))
 			sess.run(update_ops, feed_dict={i: X})
-			sess.run(clips)
+			sess.run([clips_w, clips_u])
 			if batch % how_often == 0:
 				validation_loss = 0.0
 				validation_acc = 0.0
@@ -161,12 +181,8 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = None, quant = None, GPU_FLAG=True, NUM_EP
 				if (validation_acc / count) < 0.005 and batch > num_batch / 2 or (validation_acc == 0 and batch > num_batch / 5):
 					print("Returning early due to failure.")
 					return
-		sess.run([assignments])
-		weights = [(w.name, w.eval()) for w in tf.trainable_variables()]
-		with open(LOSS_PATH + "weights.weights", "wb") as f:
-			pickle.dump([weights], f)
 
-#run(1e-4, 1e-1, SimpleRNN, quant = deterministic_ternary, NUM_EPOCH = 200)
-#run(1e-4, 1e-1, GRU, quant = deterministic_ternary, NUM_EPOCH = 200)
-#run(1e-4, 1e-1, LSTM, quant = deterministic_ternary, NUM_EPOCH = 200)
-run(1e-3, np n np.inf,Clockwork, NUM_EPOCH = 50)
+run(1e-4, [0.5, 0.125], Clockwork, quant = deterministic_ternary, WHICH = "all", NUM_EPOCH = 20)
+#run(1e-4, [1e-1, 1e-2], GRU, quant = deterministic_ternary, WHICH = "all", NUM_EPOCH = 200)
+#run(1e-4, [1e-1, 1e-2], LSTM, quant = deterministic_ternary,  WHICH = "all",NUM_EPOCH = 200)
+#run(1e-3, [1e-1, 1e-2], Clockwork, quant = deterministic_ternary, WHICH = "all", NUM_EPOCH = 200)
