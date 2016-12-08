@@ -23,7 +23,7 @@ SAVE = "../results/"
 MOLDAU = DATA + "smetana/smetana.wav"
 MODEL_PATH = DATA + "model.keras"
 SAVE_PATH = SAVE + "saved_quick.tf"
-LOSS_PATH = mkdir(SAVE + "testing/")
+LOSS_PATH = mkdir(SAVE + "song/")
 
 batch_size = 1
 HIDDEN_SIZE = 513
@@ -166,7 +166,11 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = None, quant = None, GPU_FLAG=True, NUM_EP
 		with open(LOSS_PATH + "weights.weights", "wb") as f:
 			pickle.dump([weights], f)
 
-#run(1e-4, 1e-1, SimpleRNN, quant = deterministic_ternary, NUM_EPOCH = 200)
-#run(1e-4, 1e-1, GRU, quant = deterministic_ternary, NUM_EPOCH = 200)
-#run(1e-4, 1e-1, LSTM, quant = deterministic_ternary, NUM_EPOCH = 200)
-run(1e-3, np n np.inf,Clockwork, NUM_EPOCH = 50)
+run(1e-4, np.inf, SimpleRNN, quant = deterministic_ternary, NUM_EPOCH = 500)
+run(1e-4, np.inf, GRU, quant = deterministic_ternary, NUM_EPOCH = 500)
+run(1e-4, np.inf, LSTM, quant = deterministic_ternary, NUM_EPOCH = 500)
+run(1e-3, np.inf, Clockwork, quant = deterministic_ternary, NUM_EPOCH = 500)
+run(1e-4, 0.25, SimpleRNN, quant = deterministic_ternary, NUM_EPOCH = 500, WHICH = "all")
+run(1e-4, 0.25, GRU, quant = deterministic_ternary, NUM_EPOCH = 500, WHICH = "all")
+run(1e-4, 0.25, LSTM, quant = deterministic_ternary, NUM_EPOCH = 500, WHICH = "all")
+run(1e-3, 0.25, Clockwork, quant = deterministic_ternary, NUM_EPOCH = 500, WHICH = "all")
