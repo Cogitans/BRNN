@@ -30,7 +30,7 @@ class Clockwork(SimpleRNN):
     # References
         - [A Clockwork RNN](http://arxiv.org/abs/1402.3511)
     '''
-    def __init__(self, output_dim, periods=[1], **kwargs):
+    def __init__(self, output_dim, bias_init, periods=[1], **kwargs):
         self.output_dim = output_dim
         self.bias_init = bias_init
         assert len(periods) > 0 and output_dim % len(periods) == 0, (
@@ -55,7 +55,7 @@ class Clockwork(SimpleRNN):
         module_mask = tf.Variable(module_mask, name='module_mask', trainable=False,dtype = tf.float32)
         self.periods = tf.Variable(periods, name='periods', trainable=False, dtype=tf.float32)
 
-        super(Clockwork, self).build(input_shape)
+        #super(Clockwork, self).build(input_shape)
 	
 	#####
         self.input_spec = [InputSpec(shape=input_shape)]

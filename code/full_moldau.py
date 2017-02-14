@@ -23,7 +23,7 @@ SAVE = "../results/"
 MOLDAU = DATA + "smetana/smetana.wav"
 MODEL_PATH = DATA + "model.keras"
 SAVE_PATH = SAVE + "saved_quick.tf"
-LOSS_PATH = mkdir(SAVE + "generation_new/")
+LOSS_PATH = mkdir(SAVE + "moldau_discrete/")
 
 batch_size = 1
 HIDDEN_SIZE = 513
@@ -35,14 +35,23 @@ how_often = 50
 
 #### Data Establishing ####
 def run(LR, val, RNN_TYPE, TIMESTEPS = None, quant = None, GPU_FLAG=True, NUM_EPOCH = 1, NUM_BATCH = None, SAVE_WEIGHTS = False, VERBOSE = True, WHICH = None):
-	if quant is None: assert val is np.inf
+	tf.reset_default_graph()
+	sess = tf.Session()
+	K.set_session(sess)
+	K.manual_variable_initialization(True)
+	if quant is None: 
+		assert val is np.inf
+		quant = identity
+		w_val, u_val = np.inf, np.inf
+	else:
+		w_val, u_val = val
 
 	num_timesteps = TIMESTEPS
 	
 	g = music_generator(MOLDAU, batch_size, num_timesteps, percent = .00005, offset = 0.1)
 	test_g = music_generator(MOLDAU, batch_size, num_timesteps, percent = .00005, offset = 0.1)
 
-	w_val, u_val = val
+
 	quantify_w = quant(w_val)
 	quantify_u = quant(u_val)
 
@@ -55,9 +64,9 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = None, quant = None, GPU_FLAG=True, NUM_EP
 	num_batch = NUM_EPOCH * num_batch_in_epoch if not NUM_BATCH else NUM_BATCH
 	how_often = 1
 	
-	_init = "he_normal" if val == np.inf else ternary_choice(w_val)
-	b_init = "zero" if val == np.inf else ternary_choice(u_val)
-	i_init = "identity" if val == np.inf else scale_identity(u_val)
+	_init = nary_uniform if val == np.inf else ternary_choice(w_val)
+	b_init = zero if val == np.inf else ternary_choice(u_val)
+	i_init = scale_identity(1.0) if val == np.inf else scale_identity(u_val)
 	if num_timesteps is None:
 		num_timesteps = train_timesteps - 1
 	###########################
@@ -70,12 +79,18 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = None, quant = None, GPU_FLAG=True, NUM_EP
 		if RNN_TYPE == Clockwork:
 			layer1 = RNN_TYPE(HIDDEN_SIZE, init = _init, inner_init= i_init, bias_init = b_init, periods=[1, 2, 4, 8, 16, 32, 64, 128, 256], return_sequences=True)
 			h1 = layer1(i)
+		elif RNN_TYPE == GRU:
+			layer1 = RNN_TYPE(HIDDEN_SIZE, init = _init, inner_init= i_init, return_sequences=True)
+			h1 = layer1(i)
 		else:
 			layer1 = RNN_TYPE(HIDDEN_SIZE, init = _init, inner_init = i_init, bias_init = b_init, return_sequences=True)
 			h1 = layer1(i)
 	with tf.device('/gpu:1') if GPU_FLAG else tf.device('/cpu:0'):
 		if RNN_TYPE == Clockwork:
 			layer2 = RNN_TYPE(HIDDEN_SIZE, init = _init, inner_init= i_init, bias_init = b_init, periods=[1, 2, 4, 8, 16, 32, 64, 128, 256], return_sequences=True)
+			h2 = layer2(h1)
+		elif RNN_TYPE == GRU:
+			layer2 = RNN_TYPE(HIDDEN_SIZE, init = _init, inner_init= i_init, return_sequences=True)
 			h2 = layer2(h1)
 		else:
 			layer2 = RNN_TYPE(HIDDEN_SIZE, init= _init, inner_init= i_init, bias_init = b_init, return_sequences=True)
@@ -125,6 +140,8 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = None, quant = None, GPU_FLAG=True, NUM_EP
 	for k, (g, v) in enumerate(grads_vars):
 		vars_.append(v)
 		grads.append(g)
+		# print(v)
+		# print(g)
 	
 	#clipped_grads, global_norm = tf.clip_by_global_norm(grads, 1)
 	for k, (grad, var) in enumerate(grads_vars):
@@ -150,7 +167,7 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = None, quant = None, GPU_FLAG=True, NUM_EP
 	#T.silence()
 	lr = LR
 
-	init_op = tf.initialize_all_variables()
+	init_op = tf.global_variables_initializer()
 	with sess.as_default():
 		init_op.run()
 		for batch in np.arange(num_batch):
@@ -159,8 +176,8 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = None, quant = None, GPU_FLAG=True, NUM_EP
 			fd = {i: np.zeros_like(X), labels: y, learning_rate: lr}
 			app.run(feed_dict = fd)
 			print(vars_[1].eval())
-			print(var_to_real_u[vars_[1]].eval())
-			print(grads[1].eval(feed_dict=fd))
+			# print(var_to_real_u[vars_[1]].eval())
+			# print(grads[1].eval(feed_dict=fd))
 			sess.run(update_ops, feed_dict=fd)
 			sess.run([clips_w, clips_u])
 			if batch % how_often == 0:
@@ -185,7 +202,10 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = None, quant = None, GPU_FLAG=True, NUM_EP
 					print("Returning early due to failure.")
 					return
 
-run(1e-3, [0.5, 0.125], BiasVRNN, GPU_FLAG = False, quant = deterministic_ternary, WHICH = "all", NUM_EPOCH = 20)
-#run(1e-4, [1e-1, 1e-2], GRU, quant = deterministic_ternary, WHICH = "all", NUM_EPOCH = 200)
 #run(1e-4, [1e-1, 1e-2], LSTM, quant = deterministic_ternary,  WHICH = "all",NUM_EPOCH = 200)
-#run(1e-3, [1e-1, 1e-2], Clockwork, quant = deterministic_ternary, WHICH = "all", NUM_EPOCH = 200)
+#run(1e-3, [0.5, 0.125], BiasVRNN, GPU_FLAG = False, quant = deterministic_binary, WHICH = "all", NUM_EPOCH = 20)
+run(1e-3, [0.5, 0.125], Clockwork, GPU_FLAG = False, quant = deterministic_binary, WHICH = "all", NUM_EPOCH = 20)
+run(1e-3, [0.5, 0.5], BiasVRNN, GPU_FLAG = False, quant = deterministic_binary, WHICH = "all", NUM_EPOCH = 20)
+run(1e-3, [0.5, 0.5], Clockwork, GPU_FLAG = False, quant = deterministic_binary, WHICH = "all", NUM_EPOCH = 20)
+run(1e-3, np.inf, BiasVRNN, GPU_FLAG = False, quant = None, WHICH = "all", NUM_EPOCH = 20)
+run(1e-3, np.inf, Clockwork, GPU_FLAG = False, quant = None, WHICH = "all", NUM_EPOCH = 20)

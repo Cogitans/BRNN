@@ -49,7 +49,7 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = 1, quant = None, GPU_FLAG=True, NUM_EPOCH
 	num_batch_in_epoch = data_len(TEXT, batch_size, num_timesteps, percent = .95)
 	num_test = data_len(TEXT, batch_size, num_timesteps, percent = .05)
 	num_batch = NUM_EPOCH * num_batch_in_epoch if not NUM_BATCH else NUM_BATCH
-	how_often = num_batch_in_epoch // 100
+	how_often = num_batch_in_epoch // 4
 	
 	_init = "he_normal" if val == np.inf else ternary_choice(val)
 	i_init = "identity" 

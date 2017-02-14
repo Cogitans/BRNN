@@ -29,4 +29,6 @@ def stochastic_binary(val):
 	return to_ret
 
 def identity(x):
-	return x
+	def f(x):
+		return x
+	return f

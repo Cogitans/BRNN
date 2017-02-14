@@ -41,6 +41,9 @@ def scale_identity(val):
 def nary_uniform(shape, scale=1.5, name=None):
     return K.random_uniform_variable(shape, -scale, scale, name=name)
 
+def zero(shape, scale=1.5, name=None):
+    return K.zeros(shape, name=name)
+
 def printProgress(place, place_per, how_often, loss):
     if place % how_often == 0:
         x = place // place_per
