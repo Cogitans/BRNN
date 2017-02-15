@@ -188,6 +188,31 @@ class MUT1(GRU):
         h = h_temp * z + h_tm1 * (1 - z)
         return h, [h]
 
+
+class ScaledGRU(GRU):
+
+    def build(self, input_shape):
+        super(ScaledGRU, self).build(input_shape)
+        self.A = -3.0#K.variable(-1.0, name="alpha")
+
+    def preprocess_input(self, x):
+        return x
+
+    def step(self, x, states):
+        h_tm1 = states[0]#tf.clip_by_value(states[0], -0.5, 0.5)  # previous memory
+        B_U = states[1]  # dropout matrices for recurrent units
+        B_W = states[2]
+
+        x_z = K.dot(x, self.W_z) + self.b_z
+        x_r = K.dot(x, self.W_r) + self.b_r
+        x_h = K.dot(x, self.W_h) + self.b_h
+        z = self.inner_activation(x_z + tf.multiply(tf.pow(2.0, self.A), K.dot(h_tm1, self.U_z)))
+        r = self.inner_activation(x_r + tf.multiply(tf.pow(2.0, self.A), K.dot(h_tm1, self.U_r)))
+
+        hh = self.activation(x_h + K.dot(r * h_tm1, self.U_h))
+        h = z * h_tm1 + (1 - z) * hh
+        return h, [h]
+
 class BiasVRNN(SimpleRNN):
     def __init__(self, output_dim,
                  init='glorot_uniform', inner_init='orthogonal',

@@ -23,7 +23,7 @@ SAVE = "../results/"
 MOLDAU = DATA + "smetana/smetana.wav"
 MODEL_PATH = DATA + "model.keras"
 SAVE_PATH = SAVE + "saved_quick.tf"
-LOSS_PATH = mkdir(SAVE + "moldau_discrete/")
+LOSS_PATH = mkdir(SAVE + "moldau_weights/")
 
 batch_size = 1
 HIDDEN_SIZE = 513
@@ -48,8 +48,8 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = None, quant = None, GPU_FLAG=True, NUM_EP
 
 	num_timesteps = TIMESTEPS
 	
-	g = music_generator(MOLDAU, batch_size, num_timesteps, percent = .00005, offset = 0.1)
-	test_g = music_generator(MOLDAU, batch_size, num_timesteps, percent = .00005, offset = 0.1)
+	g = music_generator(MOLDAU, batch_size, num_timesteps, percent = .0001, offset = 0.1)
+	test_g = music_generator(MOLDAU, batch_size, num_timesteps, percent = .0001, offset = 0.1)
 
 
 	quantify_w = quant(w_val)
@@ -59,8 +59,8 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = None, quant = None, GPU_FLAG=True, NUM_EP
 	x_y_generator = music_pair_generator(g)
 	test_generator = music_pair_generator(test_g)
 
-	num_batch_in_epoch, num_classes, train_timesteps = music_len(MOLDAU, batch_size, num_timesteps, percent = .00005, offset = 0.1)
-	num_test, _, test_timesteps = music_len(MOLDAU, batch_size, num_timesteps, percent = .00005, offset = 0.1)
+	num_batch_in_epoch, num_classes, train_timesteps = music_len(MOLDAU, batch_size, num_timesteps, percent = .0001, offset = 0.1)
+	num_test, _, test_timesteps = music_len(MOLDAU, batch_size, num_timesteps, percent = .0001, offset = 0.1)
 	num_batch = NUM_EPOCH * num_batch_in_epoch if not NUM_BATCH else NUM_BATCH
 	how_often = 1
 	
@@ -175,7 +175,6 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = None, quant = None, GPU_FLAG=True, NUM_EP
 			X, y = x_y_generator.next()
 			fd = {i: np.zeros_like(X), labels: y, learning_rate: lr}
 			app.run(feed_dict = fd)
-			print(vars_[1].eval())
 			# print(var_to_real_u[vars_[1]].eval())
 			# print(grads[1].eval(feed_dict=fd))
 			sess.run(update_ops, feed_dict=fd)
@@ -203,9 +202,9 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = None, quant = None, GPU_FLAG=True, NUM_EP
 					return
 
 #run(1e-4, [1e-1, 1e-2], LSTM, quant = deterministic_ternary,  WHICH = "all",NUM_EPOCH = 200)
-#run(1e-3, [0.5, 0.125], BiasVRNN, GPU_FLAG = False, quant = deterministic_binary, WHICH = "all", NUM_EPOCH = 20)
-run(1e-3, [0.5, 0.125], Clockwork, GPU_FLAG = False, quant = deterministic_binary, WHICH = "all", NUM_EPOCH = 20)
-run(1e-3, [0.5, 0.5], BiasVRNN, GPU_FLAG = False, quant = deterministic_binary, WHICH = "all", NUM_EPOCH = 20)
-run(1e-3, [0.5, 0.5], Clockwork, GPU_FLAG = False, quant = deterministic_binary, WHICH = "all", NUM_EPOCH = 20)
-run(1e-3, np.inf, BiasVRNN, GPU_FLAG = False, quant = None, WHICH = "all", NUM_EPOCH = 20)
-run(1e-3, np.inf, Clockwork, GPU_FLAG = False, quant = None, WHICH = "all", NUM_EPOCH = 20)
+run(1e-3, [0.5, 0.125], BiasVRNN, GPU_FLAG = False, quant = deterministic_binary, WHICH = "all", NUM_EPOCH = 100)
+run(1e-3, [0.5, 0.125], Clockwork, GPU_FLAG = False, quant = deterministic_binary, WHICH = "all", NUM_EPOCH = 100)
+run(1e-3, [0.5, 0.5], BiasVRNN, GPU_FLAG = False, quant = deterministic_binary, WHICH = "all", NUM_EPOCH = 100)
+run(1e-3, [0.5, 0.5], Clockwork, GPU_FLAG = False, quant = deterministic_binary, WHICH = "all", NUM_EPOCH = 100)
+run(1e-3, np.inf, BiasVRNN, GPU_FLAG = False, quant = None, WHICH = "all", NUM_EPOCH = 100)
+run(1e-3, np.inf, Clockwork, GPU_FLAG = False, quant = None, WHICH = "all", NUM_EPOCH = 100)

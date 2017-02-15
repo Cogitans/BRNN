@@ -1,6 +1,9 @@
 import tensorflow as tf
 import numpy as np 
 from keras import backend as K
+import math
+
+ln2 = math.log(2)
 
 def deterministic_ternary(val):
 	def to_ret(x):	
@@ -32,3 +35,7 @@ def identity(x):
 	def f(x):
 		return x
 	return f
+
+def exponential_quant(x):
+	temp = tf.div(tf.log(x), tf.constant(ln2))
+	return tf.pow(2.0, tf.round(temp))
