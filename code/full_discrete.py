@@ -21,7 +21,7 @@ SAVE = "../results/"
 TEXT = DATA + "shakespeare/s.txt"
 MODEL_PATH = DATA + "model.keras"
 SAVE_PATH = SAVE + "saved_quick.tf"
-LOSS_PATH = mkdir(SAVE + "scale_tests/")
+LOSS_PATH = mkdir(SAVE + "ScaredGRU/")
 
 batch_size = 32
 HIDDEN_SIZE = 128
@@ -98,8 +98,8 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = 128, quant = None, GPU_FLAG=True, NUM_EPO
 			to_quantize_u.append(v)
 		elif "W" in v.name.split("_") or "W:0" in v.name.split("_"):
 			to_quantize_w.append(v)
-		elif "alpha" in v.name.split("_") or "alpha:0" in v.name.split("_"):
-			alpha_vars.append(v)
+		#elif "alpha" in v.name.split("_") or "alpha:0" in v.name.split("_"):
+		#	alpha_vars.append(v)
 		else:
 			print(v)
 
@@ -162,7 +162,7 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = 128, quant = None, GPU_FLAG=True, NUM_EPO
 
 	assignments_u = [tf.assign(w, quantify_u(var_to_real_u[w])) for w in to_quantize_u]
 	assignments_w = [tf.assign(w, quantify_w(var_to_real_w[w])) for w in to_quantize_w]
-	assignments_alpha = [tf.assign(w, tf.round(var_to_real_alpha[w])) for w in alpha_vars]
+	assignments_alpha = []#tf.assign(w, tf.round(var_to_real_alpha[w])) for w in alpha_vars]
 
 	clips_u = [tf.assign(w, tf.clip_by_value(w, -u_val, u_val)).op for w in real_valued_u]
 	clips_w = [tf.assign(w, tf.clip_by_value(w, -w_val, w_val)).op for w in real_valued_w]

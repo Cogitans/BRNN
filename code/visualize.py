@@ -54,29 +54,29 @@ for activation in np.arange(0, 1):
 		text += """<span "style=color: rgb({0},{1},{2});">{3}</span>""".format(mycolor[0], mycolor[1], mycolor[2], letters[i])
 		if letters[i] == '\n':
 			text += "</br>"
-	with open("myhtml.html", "wb") as f:
-		f.write(template.format(text))
+	# with open("myhtml.html", "wb") as f:
+		# f.write(template.format(text))
 
 
-# for activation in np.arange(100, 110):
-# 	root = Tk()
-# 	text = Text(root)
-# 	text.insert(INSERT, letters)
-# 	line = 1
-# 	col = 0
-# 	for i in range(len(letters)):
-# 		if letters[i] == "\n":
-# 			line += 1
-# 			col = 0
-# 			continue
-# 		z = activations[i, activation]
-# 		if z < 0:
-# 			mycolor = '#%02x%02x%02x' % (255 + z, 255 + z, 255) 
-# 		else:
-# 			mycolor = '#%02x%02x%02x' % (255, 255 - z, 255 - z) 
-# 		text.tag_add(str(line)+"."+str(col), str(line)+"."+str(col))
-# 		text.tag_config(str(line)+"."+str(col), background=mycolor)
-# 		col += 1
+for activation in np.arange(150, 170):
+	root = Tk()
+	text = Text(root)
+	text.insert(INSERT, letters)
+	line = 1
+	col = 0
+	for i in range(len(letters)):
+		if letters[i] == "\n":
+			line += 1
+			col = 0
+			continue
+		z = activations[i, activation]
+		if z < 0:
+			mycolor = '#%02x%02x%02x' % (255 + z, 255 + z, 255) 
+		else:
+			mycolor = '#%02x%02x%02x' % (255, 255 - z, 255 - z) 
+		text.tag_add(str(line)+"."+str(col), str(line)+"."+str(col))
+		text.tag_config(str(line)+"."+str(col), background=mycolor)
+		col += 1
 
-# 	text.pack()
-# 	root.mainloop()
+	text.pack()
+	root.mainloop()
