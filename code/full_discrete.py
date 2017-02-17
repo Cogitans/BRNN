@@ -23,8 +23,9 @@ MODEL_PATH = DATA + "model.keras"
 SAVE_PATH = SAVE + "saved_quick.tf"
 LOSS_PATH = mkdir(SAVE + "ScaredGRU/")
 
-batch_size = 32
-HIDDEN_SIZE = 128
+
+batch_size = 256
+HIDDEN_SIZE = 512
 num_batch = None
 how_often = 1
 
@@ -38,9 +39,13 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = 128, quant = None, GPU_FLAG=True, NUM_EPO
 	K.set_session(sess)
 	K.manual_variable_initialization(True)
 
-	if quant is None: assert val is np.inf
+	if quant is None: 
+		assert val is np.inf
+		quant = identity
+		w_val, u_val = np.inf, np.inf
+	else:
+		w_val, u_val = val
 
-	w_val, u_val = val
 	quantify_w = quant(w_val)
 	quantify_u = quant(u_val)
 
@@ -58,8 +63,8 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = 128, quant = None, GPU_FLAG=True, NUM_EPO
 	num_batch = NUM_EPOCH * num_batch_in_epoch if not NUM_BATCH else NUM_BATCH
 	how_often = num_batch_in_epoch // 4
 	
-	_init = ternary_choice(w_val)
-	i_init = scale_identity(u_val)
+	_init = nary_uniform if val == np.inf else ternary_choice(w_val)
+	i_init = scale_identity(1.0) if val == np.inf else scale_identity(u_val)
 	###########################
 
 	#### Model Definition ####
@@ -73,14 +78,14 @@ def run(LR, val, RNN_TYPE, TIMESTEPS = 128, quant = None, GPU_FLAG=True, NUM_EPO
 		else:
 			layer1 = RNN_TYPE(HIDDEN_SIZE, init = _init, inner_init = i_init ,stateful=True, return_sequences=True)
 			h1 = layer1(i)
-	with tf.device('/gpu:1') if GPU_FLAG else tf.device('/cpu:0'):
+	with tf.device('/gpu:0') if GPU_FLAG else tf.device('/cpu:0'):
 		if RNN_TYPE == Clockwork:
 			layer2 = RNN_TYPE(HIDDEN_SIZE, init = _init, inner_init= i_init, periods=[1, 2, 4, 8, 16, 32], stateful=True, return_sequences=True)
 			h2 = layer2(h1)
 		else:
 			layer2 = RNN_TYPE(HIDDEN_SIZE, init= _init, inner_init= i_init, stateful=True, return_sequences=True)
 			h2 = layer2(h1)
-	with tf.device('/gpu:2') if GPU_FLAG else tf.device('/cpu:0'):
+	with tf.device('/gpu:0') if GPU_FLAG else tf.device('/cpu:0'):
 		layer3 = TimeDistributed(Dense(num_classes+1, init = _init))
 		o = layer3(h2)
 	loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(o, labels))
@@ -218,4 +223,6 @@ lr = 1e-3
 #			for quant in [deterministic_binary, stochastic_binary, deterministic_ternary, stochastic_ternary]:
 #				run(lr, val, rnn, quant=quant, WHICH=WHICH, NUM_EPOCH = 20)
 #run(lr, [1, 1], ScaledGRU, GPU_FLAG = False, quant=deterministic_binary, WHICH="all", NUM_EPOCH = 2)
-run(lr, [0.5, 0.125], GRU, GPU_FLAG = False, quant=deterministic_binary, WHICH="all", NUM_EPOCH = 2)
+run(lr, np.inf, GRU, GPU_FLAG = True, WHICH="all", NUM_EPOCH = 2)
+run(lr, [1, 0.125], GRU, GPU_FLAG = True, quant=deterministic_binary, WHICH="all", NUM_EPOCH = 2)
+run(lr, [1, 1], ScalddGRU, GPU_FLAG = True, quant=deterministic_binary, WHICH="all", NUM_EPOCH = 2)
